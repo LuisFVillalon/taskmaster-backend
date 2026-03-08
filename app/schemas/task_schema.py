@@ -1,7 +1,11 @@
+from decimal import Decimal
 from datetime import date, time, datetime
-from typing import List, Optional
 from pydantic import BaseModel, field_validator
+from typing import List, Optional
 from app.schemas.tag_schema import Tag
+
+
+
 
 
 class TaskBase(BaseModel):
@@ -39,14 +43,19 @@ class TaskBase(BaseModel):
             raise ValueError("Complexity must be an integer between 1 and 5")
         return v
 
-    @field_validator("estimated_time", mode="before")
-    @classmethod
-    def validate_estimated_time(cls, v):
-        if v is None:
+    class TaskBase(BaseModel):
+        estimated_time: Optional[float] = None
+
+        @field_validator("estimated_time", mode="before")
+        @classmethod
+        def validate_estimated_time(cls, v):
+            if v is None:
+                return v
+            if isinstance(v, Decimal):
+                v = float(v)
+            if v < 0:
+                raise ValueError("Estimated time must be a non-negative number (hours)")
             return v
-        if not isinstance(v, (int, float)) or v < 0:
-            raise ValueError("Estimated time must be a non-negative number (hours)")
-        return float(v)
 
 
 class TaskCreate(TaskBase):
