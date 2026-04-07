@@ -2,7 +2,7 @@ from logging.config import fileConfig
 import os
 from dotenv import load_dotenv
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine, pool
 from alembic import context
 
 # Load .env
@@ -12,16 +12,19 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 # Alembic Config
 config = context.config
 
-# Override sqlalchemy.url with .env value
-config.set_main_option("sqlalchemy.url", DATABASE_URL)
-
 # Logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Import Base and all models
+# Import Base and all models so autogenerate can see every table
 from app.database.database import Base
-from app.models import task_model, tag_model  # ensure models are imported
+from app.models import (  # ensure every model is visible to autogenerate
+    task_model,
+    tag_model,
+    note_model,
+    calendar_settings_model,
+    google_calendar_model,
+)
 
 target_metadata = Base.metadata
 
@@ -33,16 +36,19 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
-
     with context.begin_transaction():
         context.run_migrations()
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section),
-        prefix="sqlalchemy.",
+    # NullPool is required when connecting through a Transaction-mode pgBouncer
+    # (port 6543). It ensures Alembic never holds a connection open between
+    # migration steps, which would violate pgBouncer's transaction-level
+    # connection multiplexing.
+    connectable = create_engine(
+        DATABASE_URL,
         poolclass=pool.NullPool,
+        connect_args={"gssencmode": "disable", "connect_timeout": 10},
     )
 
     with connectable.connect() as connection:
@@ -50,7 +56,6 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
         )
-
         with context.begin_transaction():
             context.run_migrations()
 

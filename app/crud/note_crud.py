@@ -1,0 +1,70 @@
+from datetime import datetime, timezone
+from sqlalchemy.orm import Session
+from app.models.note_model import Note as NoteModel
+from app.schemas.note_schema import NoteCreate, NoteUpdate
+from app.crud.tag_crud import get_or_create_tag
+
+
+def get_notes(db: Session, user_id: str):
+    """Return all notes owned by the given user."""
+    return db.query(NoteModel).filter(NoteModel.user_id == user_id).all()
+
+
+def create_note(db: Session, note: NoteCreate, user_id: str):
+    """Create and persist a new note, auto-creating any new tags."""
+    now = datetime.now(timezone.utc)
+    db_note = NoteModel(
+        title=note.title,
+        content=note.content,
+        user_id=user_id,
+        created_date=now,
+        updated_date=now,
+    )
+    for tag_data in note.tags:
+        db_note.tags.append(get_or_create_tag(db, tag_data, user_id))
+    db.add(db_note)
+    db.commit()
+    db.refresh(db_note)
+    return db_note
+
+
+def update_note(db: Session, note_id: int, note: NoteUpdate, user_id: str):
+    """Partially update a note's title, content, and tags. Returns None if not found."""
+    db_note = (
+        db.query(NoteModel)
+        .filter(NoteModel.id == note_id, NoteModel.user_id == user_id)
+        .first()
+    )
+    if not db_note:
+        return None
+
+    if note.title is not None:
+        db_note.title = note.title
+    if note.content is not None:
+        db_note.content = note.content
+    db_note.updated_date = datetime.now(timezone.utc)
+
+    if note.tags is not None:
+        db_note.tags.clear()
+        for tag_data in note.tags:
+            tag = get_or_create_tag(db, tag_data, user_id)
+            db.flush()
+            db_note.tags.append(tag)
+
+    db.commit()
+    db.refresh(db_note)
+    return db_note
+
+
+def delete_note(db: Session, note_id: int, user_id: str):
+    """Delete a note. Returns the deleted record, or None if not found."""
+    db_note = (
+        db.query(NoteModel)
+        .filter(NoteModel.id == note_id, NoteModel.user_id == user_id)
+        .first()
+    )
+    if not db_note:
+        return None
+    db.delete(db_note)
+    db.commit()
+    return db_note

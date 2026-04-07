@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Time, Numeric, ForeignKey, func
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Time, Numeric, ForeignKey, func, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.database.database import Base
 from app.models.task_tag_model import task_tags
+from app.models.task_note_model import task_note_links
 
 class Task(Base):
     __tablename__ = "tasks"
@@ -19,7 +20,7 @@ class Task(Base):
     estimated_time = Column(Numeric(precision=10, scale=2), nullable=True)
     complexity = Column(Integer, nullable=True)
     parent_task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
-    user_id = Column(Integer, nullable=True)
+    user_id = Column(String(36), nullable=True, index=True)
     tags = relationship(
         "Tag",
         secondary=task_tags,
@@ -29,4 +30,9 @@ class Task(Base):
         "Task",
         remote_side=[id],
         backref="parent_task"
+    )
+    linked_notes = relationship(
+        "Note",
+        secondary=task_note_links,
+        back_populates="linked_tasks",
     )

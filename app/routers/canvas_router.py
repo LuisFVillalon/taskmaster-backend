@@ -29,7 +29,7 @@ async def get_user_courses():
         )
 
 @router.get("/courses/{course_id}/modules")
-async def get_course_assignments(course_id: int):
+async def get_course_modules(course_id: int):
     try:
         return await get_canvas(
             f"/courses/{course_id}/modules",
@@ -55,7 +55,7 @@ async def get_course_assignments(course_id: int):
         )
 
 @router.get("/courses/{course_id}/quizzes")
-async def get_course_assignments(course_id: int):
+async def get_course_quizzes(course_id: int):
     try:
         return await get_canvas(
             f"/courses/{course_id}/quizzes",
@@ -65,10 +65,10 @@ async def get_course_assignments(course_id: int):
         raise HTTPException(
             status_code=e.response.status_code,
             detail=e.response.text,
-        )                
+        )
 
 @router.get("/courses/{course_id}/modules/{module_id}/items")
-async def get_course_modules_items(course_id: int, module_id: int):
+async def get_course_module_items(course_id: int, module_id: int):
     try:
         return await get_canvas(
             f"/courses/{course_id}/modules/{module_id}/items",
@@ -81,7 +81,7 @@ async def get_course_modules_items(course_id: int, module_id: int):
         )
 
 @router.get("/courses/{course_id}/assignments/{assignment_id}")
-async def get_course_assignments(course_id: int, assignment_id: int):
+async def get_course_assignment_item(course_id: int, assignment_id: int):
     try:
         return await get_canvas(
             f"/courses/{course_id}/assignments/{assignment_id}",

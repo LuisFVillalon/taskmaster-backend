@@ -1,12 +1,7 @@
 from fastapi import FastAPI
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import OperationalError
-from app.database.database import engine, Base
-from app.routers import tags_router, tasks_router, canvas_router
+from app.routers import tags_router, tasks_router, canvas_router, notes_router, calendar_settings_router, user_router, google_calendar_router
+from app.database.database import check_db_connection
 from fastapi.middleware.cors import CORSMiddleware
-import time
-import psycopg2
-from dotenv import load_dotenv
 import os
 
 app = FastAPI()
@@ -23,14 +18,29 @@ app.add_middleware(
 )
 
 
-
 @app.on_event("startup")
 def startup():
-    print("DATABASE_URL =", os.getenv("DATABASE_URL"))
+    db_url = os.getenv("DATABASE_URL", "")
+    masked = db_url[:30] + "..." if len(db_url) > 30 else db_url
+    print(f"DATABASE_URL = {masked}")
+
+    if not os.getenv("SUPABASE_JWT_SECRET"):
+        import warnings
+        warnings.warn(
+            "SUPABASE_JWT_SECRET is not set — all authenticated endpoints will return 500. "
+            "Add it to .env: Supabase dashboard → Project Settings → API → JWT Secret",
+            stacklevel=1,
+        )
+
+    check_db_connection()
 
 app.include_router(tags_router.router)
 app.include_router(tasks_router.router)
 app.include_router(canvas_router.router)
+app.include_router(notes_router.router)
+app.include_router(calendar_settings_router.router)
+app.include_router(user_router.router)
+app.include_router(google_calendar_router.router)
 
 @app.get("/")
 def read_root():
