@@ -25,6 +25,7 @@ SUPABASE_JWT_SECRET  — found in Supabase dashboard → Project Settings → AP
 SUPABASE_URL         — your project URL (e.g. https://xyz.supabase.co)
 """
 
+import logging
 import os
 from dataclasses import dataclass
 from functools import lru_cache
@@ -33,6 +34,8 @@ import jwt  # PyJWT
 from jwt import PyJWKClient
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+log = logging.getLogger(__name__)
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -61,12 +64,9 @@ def _get_jwks_client() -> PyJWKClient:
     """Return a cached JWKS client for the Supabase project.
 
     URL resolution order:
-      1. SUPABASE_JWKS_URL env var  — explicit override (set this if the default
-                                      path doesn't work for your Supabase tier)
-      2. {SUPABASE_URL}/auth/v1/.well-known/jwks.json  — standard OpenID Connect
-                                                          discovery path
+      1. SUPABASE_JWKS_URL env var  — explicit override
+      2. {SUPABASE_URL}/auth/v1/.well-known/jwks.json  — standard OIDC path
     """
-    # Allow explicit override in case Supabase changes the well-known path.
     jwks_url = os.getenv("SUPABASE_JWKS_URL", "").strip()
     if not jwks_url:
         supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
@@ -77,8 +77,7 @@ def _get_jwks_client() -> PyJWKClient:
             )
         jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
 
-    import logging
-    logging.getLogger(__name__).info("JWKS endpoint: %s", jwks_url)
+    log.info("AUTH | JWKS endpoint: %s", jwks_url)
     return PyJWKClient(jwks_url, cache_keys=True)
 
 
@@ -89,33 +88,37 @@ def _decode_token(token: str) -> dict:
     • HS256  → symmetric verify with SUPABASE_JWT_SECRET
     • others → asymmetric verify via the Supabase JWKS endpoint
 
-    All non-JWT errors (network failures, missing env vars, unparseable JWKS
-    responses) are converted to jwt.InvalidTokenError so callers only need to
-    handle one exception hierarchy.
+    All non-JWT errors are converted to jwt.InvalidTokenError so the caller
+    only needs to handle one exception hierarchy.
+
+    leeway=10 gives ±10 s of clock-skew tolerance between Supabase's auth
+    server and the Fly.io VM — avoids spurious "token not yet valid" failures.
     """
-    # Peek at the header without verifying so we know the algorithm.
     unverified_header = jwt.get_unverified_header(token)
     alg = unverified_header.get("alg", "")
+    kid = unverified_header.get("kid", "<none>")
+    log.info("AUTH | alg=%s kid=%s", alg, kid)
 
+    # Disable audience check (Supabase uses aud="authenticated" which we don't
+    # need to enforce) but keep expiry and signature checks active.
     decode_options = {"verify_aud": False}
+    leeway = 10  # seconds — tolerates minor clock skew
 
     if alg == "HS256":
         secret = os.getenv("SUPABASE_JWT_SECRET", "")
         if not secret:
             raise jwt.InvalidTokenError(
-                "SUPABASE_JWT_SECRET is not configured on this server. "
-                "Add it via: fly secrets set SUPABASE_JWT_SECRET=<value>"
+                "SUPABASE_JWT_SECRET is not configured on this server."
             )
         return jwt.decode(
             token,
             secret,
             algorithms=["HS256"],
             options=decode_options,
+            leeway=leeway,
         )
 
     # Asymmetric algorithm (ES256, RS256, …) — fetch the matching public key.
-    # Wrap every step so a network blip or malformed JWKS response becomes a
-    # clean 401 instead of an unhandled 500 crash.
     try:
         jwks_client = _get_jwks_client()
         signing_key = jwks_client.get_signing_key_from_jwt(token)
@@ -133,6 +136,7 @@ def _decode_token(token: str) -> dict:
         signing_key.key,
         algorithms=["RS256", "ES256"],
         options=decode_options,
+        leeway=leeway,
     )
 
 
@@ -148,6 +152,7 @@ def get_current_user(
             ...
     """
     if credentials is None:
+        log.warning("AUTH | rejected — no Authorization header")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing Authorization header",
@@ -158,20 +163,21 @@ def get_current_user(
     try:
         payload = _decode_token(token)
     except jwt.ExpiredSignatureError:
+        log.warning("AUTH | rejected — token expired")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except jwt.InvalidTokenError as exc:
+        log.warning("AUTH | rejected — invalid token: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {exc}",
             headers={"WWW-Authenticate": "Bearer"},
         )
     except Exception as exc:
-        # Catches any residual errors (e.g. RuntimeError from missing env vars,
-        # unexpected library exceptions) so they return 401 rather than 500.
+        log.error("AUTH | rejected — unexpected error: %s: %s", type(exc).__name__, exc)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Authentication error: {type(exc).__name__}: {exc}",
@@ -180,15 +186,15 @@ def get_current_user(
 
     user_id: str = payload.get("sub", "")
     email: str = payload.get("email", "")
-    # app_metadata.provider is set by Supabase and is not user-editable.
-    # Falls back to "email" so downstream code can safely compare strings.
     app_meta = payload.get("app_metadata") or {}
     provider: str = app_meta.get("provider", "email")
 
     if not user_id:
+        log.warning("AUTH | rejected — token missing 'sub' claim; payload keys: %s", list(payload.keys()))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token payload missing 'sub' claim",
         )
 
+    log.info("AUTH | accepted — user=%s provider=%s", user_id[:8] + "...", provider)
     return UserInfo(id=user_id, email=email, provider=provider)
