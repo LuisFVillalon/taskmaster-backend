@@ -58,11 +58,27 @@ def _get_jwt_secret() -> str:
 
 @lru_cache(maxsize=1)
 def _get_jwks_client() -> PyJWKClient:
-    """Return a cached JWKS client for the Supabase project."""
-    supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
-    if not supabase_url:
-        raise RuntimeError("SUPABASE_URL is not set.")
-    jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
+    """Return a cached JWKS client for the Supabase project.
+
+    URL resolution order:
+      1. SUPABASE_JWKS_URL env var  — explicit override (set this if the default
+                                      path doesn't work for your Supabase tier)
+      2. {SUPABASE_URL}/auth/v1/.well-known/jwks.json  — standard OpenID Connect
+                                                          discovery path
+    """
+    # Allow explicit override in case Supabase changes the well-known path.
+    jwks_url = os.getenv("SUPABASE_JWKS_URL", "").strip()
+    if not jwks_url:
+        supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
+        if not supabase_url:
+            raise RuntimeError(
+                "SUPABASE_URL is not set. "
+                "Add it via: fly secrets set SUPABASE_URL=https://<project>.supabase.co"
+            )
+        jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
+
+    import logging
+    logging.getLogger(__name__).info("JWKS endpoint: %s", jwks_url)
     return PyJWKClient(jwks_url, cache_keys=True)
 
 
@@ -72,6 +88,10 @@ def _decode_token(token: str) -> dict:
 
     • HS256  → symmetric verify with SUPABASE_JWT_SECRET
     • others → asymmetric verify via the Supabase JWKS endpoint
+
+    All non-JWT errors (network failures, missing env vars, unparseable JWKS
+    responses) are converted to jwt.InvalidTokenError so callers only need to
+    handle one exception hierarchy.
     """
     # Peek at the header without verifying so we know the algorithm.
     unverified_header = jwt.get_unverified_header(token)
@@ -80,16 +100,34 @@ def _decode_token(token: str) -> dict:
     decode_options = {"verify_aud": False}
 
     if alg == "HS256":
+        secret = os.getenv("SUPABASE_JWT_SECRET", "")
+        if not secret:
+            raise jwt.InvalidTokenError(
+                "SUPABASE_JWT_SECRET is not configured on this server. "
+                "Add it via: fly secrets set SUPABASE_JWT_SECRET=<value>"
+            )
         return jwt.decode(
             token,
-            _get_jwt_secret(),
+            secret,
             algorithms=["HS256"],
             options=decode_options,
         )
 
     # Asymmetric algorithm (ES256, RS256, …) — fetch the matching public key.
-    jwks_client = _get_jwks_client()
-    signing_key = jwks_client.get_signing_key_from_jwt(token)
+    # Wrap every step so a network blip or malformed JWKS response becomes a
+    # clean 401 instead of an unhandled 500 crash.
+    try:
+        jwks_client = _get_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+    except jwt.PyJWKClientError as exc:
+        raise jwt.InvalidTokenError(
+            f"Could not retrieve signing key from JWKS endpoint: {exc}"
+        ) from exc
+    except Exception as exc:
+        raise jwt.InvalidTokenError(
+            f"Unexpected JWKS error ({type(exc).__name__}): {exc}"
+        ) from exc
+
     return jwt.decode(
         token,
         signing_key.key,
@@ -129,6 +167,14 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {exc}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception as exc:
+        # Catches any residual errors (e.g. RuntimeError from missing env vars,
+        # unexpected library exceptions) so they return 401 rather than 500.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Authentication error: {type(exc).__name__}: {exc}",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
