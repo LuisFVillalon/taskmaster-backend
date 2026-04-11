@@ -21,10 +21,10 @@ def create_work_block(db: Session, data: WorkBlockCreate, user_id: str) -> WorkB
 
 
 def get_work_blocks_for_user(db: Session, user_id: str) -> list[WorkBlock]:
-    """Return all non-dismissed blocks for a user, ordered by start time."""
+    """Return all work blocks for a user, ordered by start time."""
     return (
         db.query(WorkBlock)
-        .filter(WorkBlock.user_id == user_id, WorkBlock.status != "dismissed")
+        .filter(WorkBlock.user_id == user_id)
         .order_by(WorkBlock.start_time)
         .all()
     )
@@ -47,4 +47,24 @@ def update_work_block_status(
     block.status = status
     db.commit()
     db.refresh(block)
+    return block
+
+
+def delete_work_block(db: Session, block_id: int, user_id: str) -> WorkBlock | None:
+    """
+    Hard-delete a dismissed work block.  The block is expunged from the
+    session before the DELETE is committed so its attributes remain readable
+    for the router to serialize — expunge detaches the Python object from
+    session tracking, keeping loaded attribute values in memory even after
+    the row is gone from the database.
+    """
+    block = get_work_block(db, block_id, user_id)
+    if not block:
+        return None
+    db.expunge(block)
+    db.query(WorkBlock).filter(
+        WorkBlock.id == block_id,
+        WorkBlock.user_id == user_id,
+    ).delete(synchronize_session=False)
+    db.commit()
     return block
