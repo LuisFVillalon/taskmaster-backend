@@ -17,6 +17,7 @@ from app.crud.work_block_crud import (
     create_work_block,
     delete_work_block,
     get_work_blocks_for_user,
+    reschedule_work_block,
     update_work_block_status,
 )
 from app.database.database import get_db
@@ -60,16 +61,28 @@ def update_block(
     db: Session = Depends(get_db),
 ):
     """
-    Accept ('confirmed') or dismiss ('dismissed') a suggested work block.
-    Dismissing hard-deletes the row — there is no value in retaining a
-    rejected suggestion, and a soft 'dismissed' status would accumulate
-    stale rows indefinitely.
+    Three operations share this endpoint:
+      • { status: "confirmed" }           — accept a suggested block
+      • { status: "dismissed" }           — hard-delete a rejected suggestion
+      • { start_time, end_time }          — drag-and-drop reschedule
+    The payload schema enforces that exactly one operation is expressed.
     Only blocks owned by the authenticated user can be modified.
     """
     if data.status == "dismissed":
         block = delete_work_block(db, block_id, current_user.id)
-    else:
+    elif data.status is not None:
         block = update_work_block_status(db, block_id, current_user.id, data.status)
+    else:
+        # Reschedule — start_time and end_time are guaranteed non-None by schema.
+        try:
+            block = reschedule_work_block(
+                db, block_id, current_user.id, data.start_time, data.end_time  # type: ignore[arg-type]
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(exc),
+            )
     if not block:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
