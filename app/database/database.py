@@ -34,7 +34,9 @@ engine = create_engine(
     # gssencmode=disable: psycopg2 2.9 added GSSAPI negotiation which sends a
     # probe packet that Supabase pgBouncer does not understand, causing an
     # immediate connection drop. Disabling GSSAPI skips that probe entirely.
-    connect_args={"gssencmode": "disable", "connect_timeout": 10},
+    # prepare_threshold=None: Transaction-mode pgBouncer (port 6543) does not
+    # support server-side prepared statements; this disables them entirely.
+    connect_args={"gssencmode": "disable", "connect_timeout": 10, "prepare_threshold": None},
 )
 
 SessionLocal = sessionmaker(
