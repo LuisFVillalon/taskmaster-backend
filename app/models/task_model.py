@@ -12,7 +12,7 @@ class Task(Base):
     description = Column(String, nullable=True)
     category = Column(String, nullable=True)
     completed = Column(Boolean, default=False)
-    urgent = Column(Boolean, default=False)
+    priority = Column(Integer, nullable=True, index=True)
     due_date = Column(DateTime, nullable=True)
     due_time = Column(Time, nullable=True)
     created_date = Column(DateTime, server_default=func.now(), nullable=False)

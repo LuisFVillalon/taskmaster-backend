@@ -10,7 +10,7 @@ class TaskBase(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     completed: bool = False
-    urgent: bool = False
+    priority: Optional[int] = None
 
     due_date: Optional[date] = None
     due_time: Optional[time] = None
@@ -22,6 +22,15 @@ class TaskBase(BaseModel):
     parent_task_id: Optional[int] = None
 
     tags: List[Tag] = []
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def validate_priority(cls, v):
+        if v is None or v == 0:
+            return None
+        if not isinstance(v, int) or v < 1:
+            raise ValueError("Priority must be a positive integer (≥ 1)")
+        return v
 
     @field_validator("due_date", "due_time", mode="before")
     @classmethod

@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from datetime import datetime, timezone
 from fastapi import HTTPException
 from app.models.tag_model import Tag as TagModel
@@ -10,6 +11,30 @@ from app.crud.tag_crud import get_or_create_tag
 def get_tasks(db: Session, user_id: str):
     """Return all tasks owned by the given user."""
     return db.query(TaskModel).filter(TaskModel.user_id == user_id).all()
+
+
+def _next_available_priority(db: Session, user_id: str, exclude_task_id: int = None) -> int:
+    """Return max(priority) + 1 for the user, or 1 if no tasks exist yet."""
+    q = db.query(func.max(TaskModel.priority)).filter(TaskModel.user_id == user_id)
+    if exclude_task_id is not None:
+        q = q.filter(TaskModel.id != exclude_task_id)
+    max_p = q.scalar()
+    return (max_p or 0) + 1
+
+
+def _validate_priority_unique(db: Session, user_id: str, priority: int, exclude_task_id: int = None) -> None:
+    """Raise 400 if another task for this user already has the same priority."""
+    q = db.query(TaskModel).filter(
+        TaskModel.user_id == user_id,
+        TaskModel.priority == priority,
+    )
+    if exclude_task_id is not None:
+        q = q.filter(TaskModel.id != exclude_task_id)
+    if q.first():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Priority {priority} is already assigned to another task.",
+        )
 
 
 def _validate_parent_task_id(db: Session, parent_task_id: int, user_id: str) -> None:
@@ -32,12 +57,16 @@ def _validate_parent_task_id(db: Session, parent_task_id: int, user_id: str) -> 
 def create_task(db: Session, task: TaskCreate, user_id: str):
     """Create and persist a new task, auto-creating any new tags."""
     now = datetime.now(timezone.utc)
+    priority = task.priority
+    if priority is not None:
+        _validate_priority_unique(db, user_id, priority)
+
     db_task = TaskModel(
         title=task.title,
         description=task.description,
         category=task.category,
         completed=task.completed,
-        urgent=task.urgent,
+        priority=priority,
         due_date=task.due_date,
         due_time=task.due_time,
         created_date=now,
@@ -100,11 +129,16 @@ def update_task(db: Session, task_id: int, task: TaskCreate, user_id: str):
             raise HTTPException(status_code=400, detail="A task cannot be its own parent")
         _validate_parent_task_id(db, task.parent_task_id, user_id)
 
+    if task.priority is not None:
+        _validate_priority_unique(db, user_id, task.priority, exclude_task_id=task_id)
+        db_task.priority = task.priority
+    else:
+        db_task.priority = None
+
     db_task.title = task.title
     db_task.description = task.description
     db_task.category = task.category
     db_task.completed = task.completed
-    db_task.urgent = task.urgent
     db_task.due_date = task.due_date
     db_task.due_time = task.due_time
     db_task.completed_date = task.completed_date
