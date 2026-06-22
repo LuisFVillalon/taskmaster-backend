@@ -1,10 +1,5 @@
 from fastapi import FastAPI
-from app.routers import tags_router, tasks_router, canvas_router, notes_router, calendar_settings_router, user_router, google_calendar_router
-from app.routers import work_blocks_router
-from app.routers import availability_preference_router
-# Import models so Alembic's autogenerate and SQLAlchemy's metadata pick them up.
-import app.models.work_block_model              # noqa: F401
-import app.models.availability_preference_model  # noqa: F401
+from app.routers import tags_router, tasks_router, canvas_router, notes_router, user_router, calendar_router
 from app.database.database import check_db_connection
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -43,11 +38,8 @@ app.include_router(tags_router.router)
 app.include_router(tasks_router.router)
 app.include_router(canvas_router.router)
 app.include_router(notes_router.router)
-app.include_router(calendar_settings_router.router)
 app.include_router(user_router.router)
-app.include_router(google_calendar_router.router)
-app.include_router(work_blocks_router.router)
-app.include_router(availability_preference_router.router)
+app.include_router(calendar_router.router)
 
 @app.get("/")
 def read_root():

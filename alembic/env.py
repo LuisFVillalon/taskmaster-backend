@@ -22,8 +22,6 @@ from app.models import (  # ensure every model is visible to autogenerate
     task_model,
     tag_model,
     note_model,
-    calendar_settings_model,
-    google_calendar_model,
 )
 
 target_metadata = Base.metadata

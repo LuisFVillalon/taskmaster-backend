@@ -28,7 +28,6 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import UserInfo, get_current_user
 from app.database.database import get_db
-from app.models.calendar_settings_model import CalendarSettings
 from app.models.note_model import Note
 from app.models.tag_model import Tag
 from app.models.task_model import Task
@@ -198,8 +197,7 @@ async def delete_account(
             {"ids": task_ids},
         )
 
-    # ── 2. Delete owned rows (cascade handles note_tags, task_note_links) ────
-    db.query(CalendarSettings).filter(CalendarSettings.user_id == uid).delete()
+    # ── 2. Delete owned rows (cascade handles note_tags) ────
     db.query(Note).filter(Note.user_id == uid).delete()
     db.query(Task).filter(Task.user_id == uid).delete()
     db.query(Tag).filter(Tag.user_id == uid).delete()

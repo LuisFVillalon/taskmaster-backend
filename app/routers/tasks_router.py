@@ -115,8 +115,6 @@ def claim_existing_data(
     from app.models.task_model import Task as TaskModel
     from app.models.note_model import Note as NoteModel
     from app.models.tag_model import Tag as TagModel
-    from app.models.calendar_settings_model import CalendarSettings as CalendarSettingsModel
-
     uid = current_user.id
 
     tasks_claimed = (
@@ -134,11 +132,6 @@ def claim_existing_data(
         .filter(TagModel.user_id == None)  # noqa: E711
         .update({"user_id": uid}, synchronize_session=False)
     )
-    calendar_claimed = (
-        db.query(CalendarSettingsModel)
-        .filter(CalendarSettingsModel.user_id == None)  # noqa: E711
-        .update({"user_id": uid}, synchronize_session=False)
-    )
 
     db.commit()
 
@@ -147,6 +140,5 @@ def claim_existing_data(
             "tasks": tasks_claimed,
             "notes": notes_claimed,
             "tags": tags_claimed,
-            "calendar_settings": calendar_claimed,
         }
     }

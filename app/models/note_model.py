@@ -2,7 +2,6 @@ from sqlalchemy import Column, Integer, String, Text, DateTime, func
 from sqlalchemy.orm import relationship
 from app.database.database import Base
 from app.models.note_tag_model import note_tags
-from app.models.task_note_model import task_note_links
 
 
 class Note(Base):
@@ -19,9 +18,4 @@ class Note(Base):
         "Tag",
         secondary=note_tags,
         back_populates="notes",
-    )
-    linked_tasks = relationship(
-        "Task",
-        secondary=task_note_links,
-        back_populates="linked_notes",
     )

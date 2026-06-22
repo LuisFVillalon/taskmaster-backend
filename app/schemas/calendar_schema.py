@@ -1,13 +1,6 @@
+from pydantic import BaseModel
 from datetime import date
 from typing import Optional
-from pydantic import BaseModel
-
-
-class CalendarSettingsBase(BaseModel):
-    title: str
-    sub_header: str
-    start_date: date
-    end_date: date
 
 
 class CalendarSettingsUpdate(BaseModel):
@@ -17,8 +10,11 @@ class CalendarSettingsUpdate(BaseModel):
     end_date: Optional[date] = None
 
 
-class CalendarSettings(CalendarSettingsBase):
+class CalendarSettings(BaseModel):
     id: int
-    user_id: Optional[str] = None
+    title: str
+    sub_header: str
+    start_date: date
+    end_date: date
 
     model_config = {"from_attributes": True}
