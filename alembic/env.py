@@ -22,6 +22,7 @@ from app.models import (  # ensure every model is visible to autogenerate
     task_model,
     tag_model,
     note_model,
+    profile_model,
 )
 
 target_metadata = Base.metadata

@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import tags_router, tasks_router, notes_router, user_router, calendar_router, habits_router
+from app.routers import tags_router, tasks_router, notes_router, user_router, calendar_router, habits_router, profile_router
 from app.database.database import check_db_connection
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -44,6 +44,7 @@ app.include_router(notes_router.router)
 app.include_router(user_router.router)
 app.include_router(calendar_router.router)
 app.include_router(habits_router.router)
+app.include_router(profile_router.router)
 
 @app.get("/")
 def read_root():
