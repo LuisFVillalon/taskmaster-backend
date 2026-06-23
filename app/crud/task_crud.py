@@ -1,5 +1,4 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import datetime, timezone
 from fastapi import HTTPException
 from app.models.tag_model import Tag as TagModel
@@ -11,15 +10,6 @@ from app.crud.tag_crud import get_or_create_tag
 def get_tasks(db: Session, user_id: str):
     """Return all tasks owned by the given user."""
     return db.query(TaskModel).filter(TaskModel.user_id == user_id).all()
-
-
-def _next_available_priority(db: Session, user_id: str, exclude_task_id: int = None) -> int:
-    """Return max(priority) + 1 for the user, or 1 if no tasks exist yet."""
-    q = db.query(func.max(TaskModel.priority)).filter(TaskModel.user_id == user_id)
-    if exclude_task_id is not None:
-        q = q.filter(TaskModel.id != exclude_task_id)
-    max_p = q.scalar()
-    return (max_p or 0) + 1
 
 
 def _validate_priority_unique(db: Session, user_id: str, priority: int, exclude_task_id: int = None) -> None:
@@ -148,9 +138,8 @@ def update_task(db: Session, task_id: int, task: TaskCreate, user_id: str):
 
     db_task.tags.clear()
     for tag_data in task.tags:
-        tag = get_or_create_tag(db, tag_data, user_id)
-        db.flush()
-        db_task.tags.append(tag)
+        db_task.tags.append(get_or_create_tag(db, tag_data, user_id))
+    db.flush()
 
     db.commit()
     db.refresh(db_task)

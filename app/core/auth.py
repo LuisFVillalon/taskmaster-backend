@@ -40,6 +40,14 @@ log = logging.getLogger(__name__)
 _bearer = HTTPBearer(auto_error=False)
 
 
+def _auth_error(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 @dataclass(frozen=True)
 class UserInfo:
     """Minimal user identity extracted from the verified JWT."""
@@ -153,36 +161,20 @@ def get_current_user(
     """
     if credentials is None:
         log.warning("AUTH | rejected — no Authorization header")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing Authorization header",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _auth_error("Missing Authorization header")
 
     token = credentials.credentials
     try:
         payload = _decode_token(token)
     except jwt.ExpiredSignatureError:
         log.warning("AUTH | rejected — token expired")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _auth_error("Token has expired")
     except jwt.InvalidTokenError as exc:
         log.warning("AUTH | rejected — invalid token: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid token: {exc}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except Exception as exc:
-        log.error("AUTH | rejected — unexpected error: %s: %s", type(exc).__name__, exc)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication error: {type(exc).__name__}: {exc}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise _auth_error(f"Invalid token: {exc}")
+    except Exception:
+        log.exception("AUTH | unexpected error during token decode")
+        raise
 
     user_id: str = payload.get("sub", "")
     email: str = payload.get("email", "")

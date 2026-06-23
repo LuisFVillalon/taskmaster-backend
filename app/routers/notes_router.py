@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from app.core.auth import UserInfo, get_current_user
+from app.core.http_utils import require_found
 from app.database.database import get_db
 from app.schemas.note_schema import Note, NoteCreate, NoteUpdate
 from app.crud.note_crud import get_notes, create_note, update_note, delete_note
@@ -35,10 +36,7 @@ def update_note_by_id(
     db: Session = Depends(get_db),
 ):
     """Partially update a note's title, content, and tags."""
-    note = update_note(db, note_id, payload, current_user.id)
-    if not note:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
-    return note
+    return require_found(update_note(db, note_id, payload, current_user.id), "Note not found")
 
 
 @router.delete("/del-note/{note_id}", response_model=Note)
@@ -48,7 +46,4 @@ def delete_note_by_id(
     db: Session = Depends(get_db),
 ):
     """Delete a note owned by the authenticated user."""
-    note = delete_note(db, note_id, current_user.id)
-    if not note:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Note not found")
-    return note
+    return require_found(delete_note(db, note_id, current_user.id), "Note not found")

@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-from app.config.supabase_client import supabase
 from app.core.auth import UserInfo, get_current_user
+from app.core.http_utils import require_found
 from app.database.database import get_db
+from app.models.note_model import Note as NoteModel
+from app.models.tag_model import Tag as TagModel
+from app.models.task_model import Task as TaskModel
 from app.schemas.task_schema import Task, TaskCreate
 from app.crud.task_crud import get_tasks, create_task, delete_task, update_task_status, update_task
 
@@ -35,10 +38,7 @@ def delete_task_by_id(
     db: Session = Depends(get_db),
 ):
     """Delete a task owned by the authenticated user."""
-    deleted_task = delete_task(db, task_id, current_user.id)
-    if not deleted_task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    return deleted_task
+    return require_found(delete_task(db, task_id, current_user.id), "Task not found")
 
 
 @router.patch("/update-task-status/{task_id}", response_model=Task)
@@ -48,10 +48,7 @@ def update_complete_status_by_id(
     db: Session = Depends(get_db),
 ):
     """Toggle the completion status of a task."""
-    task = update_task_status(db, task_id, current_user.id)
-    if not task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    return task
+    return require_found(update_task_status(db, task_id, current_user.id), "Task not found")
 
 
 @router.put("/update-task/{task_id}", response_model=Task)
@@ -62,40 +59,17 @@ def update_task_by_id(
     db: Session = Depends(get_db),
 ):
     """Replace all fields of an existing task."""
-    task = update_task(db, task_id, payload, current_user.id)
-    if not task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    return task
+    return require_found(update_task(db, task_id, payload, current_user.id), "Task not found")
 
 
-@router.post("/save-tasks-list")
-async def create_new_tasks(
+@router.post("/save-tasks-list", response_model=list[Task])
+def create_new_tasks(
     tasks: list[TaskCreate],
     current_user: UserInfo = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Bulk-insert an array of tasks (used by the AI task-plan flow)."""
-    created_tasks = []
-
-    for task in tasks:
-        task_data = task.model_dump(mode="json")
-        tags = task_data.pop("tags", [])
-        # Inject the authenticated user's ID — never trust a client-supplied value.
-        task_data["user_id"] = current_user.id
-
-        task_response = supabase.table("tasks").insert(task_data).execute()
-        if not task_response.data:
-            raise HTTPException(status_code=400, detail="Task insert failed")
-
-        inserted_task = task_response.data[0]
-        task_id = inserted_task["id"]
-
-        if tags:
-            tag_rows = [{"task_id": task_id, "tag_id": tag["id"]} for tag in tags]
-            supabase.table("task_tags").insert(tag_rows).execute()
-
-        created_tasks.append(inserted_task)
-
-    return created_tasks
+    return [create_task(db, task, current_user.id) for task in tasks]
 
 
 @router.post("/claim-data", status_code=status.HTTP_200_OK)
@@ -112,9 +86,6 @@ def claim_existing_data(
 
     Returns the count of rows claimed per table.
     """
-    from app.models.task_model import Task as TaskModel
-    from app.models.note_model import Note as NoteModel
-    from app.models.tag_model import Tag as TagModel
     uid = current_user.id
 
     tasks_claimed = (

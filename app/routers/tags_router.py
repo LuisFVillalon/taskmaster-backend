@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.auth import UserInfo, get_current_user
+from app.core.http_utils import require_found
 from app.database.database import get_db
 from app.schemas.tag_schema import Tag, TagCreate
 from app.crud.tag_crud import get_tags, create_tag, delete_tag, update_tag
@@ -34,10 +35,7 @@ def delete_tag_by_id(
     db: Session = Depends(get_db),
 ):
     """Delete a tag owned by the authenticated user."""
-    deleted_tag = delete_tag(db, tag_id, current_user.id)
-    if not deleted_tag:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
-    return deleted_tag
+    return require_found(delete_tag(db, tag_id, current_user.id), "Tag not found")
 
 
 @router.put("/update-tag/{tag_id}", response_model=Tag)
@@ -48,7 +46,4 @@ def update_tag_by_id(
     db: Session = Depends(get_db),
 ):
     """Update a tag's name and color."""
-    tag = update_tag(db, tag_id, payload, current_user.id)
-    if not tag:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tag not found")
-    return tag
+    return require_found(update_tag(db, tag_id, payload, current_user.id), "Tag not found")

@@ -47,9 +47,8 @@ def update_note(db: Session, note_id: int, note: NoteUpdate, user_id: str):
     if note.tags is not None:
         db_note.tags.clear()
         for tag_data in note.tags:
-            tag = get_or_create_tag(db, tag_data, user_id)
-            db.flush()
-            db_note.tags.append(tag)
+            db_note.tags.append(get_or_create_tag(db, tag_data, user_id))
+        db.flush()
 
     db.commit()
     db.refresh(db_note)
