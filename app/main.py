@@ -32,7 +32,11 @@ def startup():
             stacklevel=1,
         )
 
-    check_db_connection()
+    try:
+        check_db_connection()
+    except Exception as exc:
+        import warnings
+        warnings.warn(f"Startup DB check failed (app will still start): {exc}", stacklevel=1)
 
 app.include_router(tags_router.router)
 app.include_router(tasks_router.router)
