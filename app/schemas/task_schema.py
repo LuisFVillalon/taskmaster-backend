@@ -18,7 +18,6 @@ class TaskBase(BaseModel):
     completed_date: Optional[datetime] = None
 
     estimated_time: Optional[float] = None
-    complexity: Optional[int] = None
     parent_task_id: Optional[int] = None
 
     tags: List[Tag] = []
@@ -49,18 +48,6 @@ class TaskBase(BaseModel):
         if v < 0:
             raise ValueError("Estimated time must be non-negative")
         return v
-
-    @field_validator("complexity", mode="before")
-    @classmethod
-    def validate_complexity(cls, v):
-        if v == 0:
-            return None
-        if v is None:
-            return v
-        if not isinstance(v, int) or v < 1 or v > 5:
-            raise ValueError("Complexity must be 1-5")
-        return v
-
 
 class TaskCreate(TaskBase):
     pass

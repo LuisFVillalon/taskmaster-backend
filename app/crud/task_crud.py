@@ -62,7 +62,6 @@ def create_task(db: Session, task: TaskCreate, user_id: str):
         created_date=now,
         completed_date=now if task.completed else None,
         estimated_time=task.estimated_time,
-        complexity=task.complexity,
         parent_task_id=task.parent_task_id,
         user_id=user_id,
     )
@@ -133,7 +132,6 @@ def update_task(db: Session, task_id: int, task: TaskCreate, user_id: str):
     db_task.due_time = task.due_time
     db_task.completed_date = task.completed_date
     db_task.estimated_time = task.estimated_time
-    db_task.complexity = task.complexity
     db_task.parent_task_id = task.parent_task_id
 
     db_task.tags.clear()

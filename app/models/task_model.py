@@ -17,7 +17,6 @@ class Task(Base):
     created_date = Column(DateTime, server_default=func.now(), nullable=False)
     completed_date = Column(DateTime, nullable=True)
     estimated_time = Column(Numeric(precision=10, scale=2), nullable=True)
-    complexity = Column(Integer, nullable=True)
     parent_task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
     user_id = Column(String(36), nullable=True, index=True)
     tags = relationship(
