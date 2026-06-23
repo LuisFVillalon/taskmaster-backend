@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import tags_router, tasks_router, canvas_router, notes_router, user_router, calendar_router, habits_router
+from app.routers import tags_router, tasks_router, notes_router, user_router, calendar_router, habits_router
 from app.database.database import check_db_connection
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -40,7 +40,6 @@ def startup():
 
 app.include_router(tags_router.router)
 app.include_router(tasks_router.router)
-app.include_router(canvas_router.router)
 app.include_router(notes_router.router)
 app.include_router(user_router.router)
 app.include_router(calendar_router.router)
