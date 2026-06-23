@@ -2,7 +2,7 @@ from decimal import Decimal
 from datetime import date, time, datetime
 from pydantic import BaseModel, field_validator
 from typing import List, Optional
-from app.schemas.tag_schema import Tag
+from app.schemas.tag_schema import Tag, TagCreate
 
 
 class TaskBase(BaseModel):
@@ -20,7 +20,7 @@ class TaskBase(BaseModel):
     estimated_time: Optional[float] = None
     parent_task_id: Optional[int] = None
 
-    tags: List[Tag] = []
+    tags: List[TagCreate] = []
 
     @field_validator("priority", mode="before")
     @classmethod
@@ -50,7 +50,7 @@ class TaskBase(BaseModel):
         return v
 
 class TaskCreate(TaskBase):
-    pass
+    tags: List[TagCreate] = []
 
 
 class Task(TaskBase):
@@ -59,6 +59,7 @@ class Task(TaskBase):
     # user_id is set server-side from the JWT — exposed in responses but never
     # accepted from the client in TaskCreate/TaskBase.
     user_id: Optional[str] = None
+    tags: List[Tag] = []
 
     model_config = {
         "from_attributes": True
