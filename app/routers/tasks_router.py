@@ -72,6 +72,9 @@ def create_new_tasks(
     return [create_task(db, task, current_user.id) for task in tasks]
 
 
+_CLAIMABLE_MODELS = {"tasks": TaskModel, "notes": NoteModel, "tags": TagModel}
+
+
 @router.post("/claim-data", status_code=status.HTTP_200_OK)
 def claim_existing_data(
     current_user: UserInfo = Depends(get_current_user),
@@ -87,29 +90,11 @@ def claim_existing_data(
     Returns the count of rows claimed per table.
     """
     uid = current_user.id
-
-    tasks_claimed = (
-        db.query(TaskModel)
-        .filter(TaskModel.user_id == None)  # noqa: E711
-        .update({"user_id": uid}, synchronize_session=False)
-    )
-    notes_claimed = (
-        db.query(NoteModel)
-        .filter(NoteModel.user_id == None)  # noqa: E711
-        .update({"user_id": uid}, synchronize_session=False)
-    )
-    tags_claimed = (
-        db.query(TagModel)
-        .filter(TagModel.user_id == None)  # noqa: E711
-        .update({"user_id": uid}, synchronize_session=False)
-    )
-
-    db.commit()
-
-    return {
-        "claimed": {
-            "tasks": tasks_claimed,
-            "notes": notes_claimed,
-            "tags": tags_claimed,
-        }
+    claimed = {
+        name: db.query(model).filter(model.user_id == None).update(  # noqa: E711
+            {"user_id": uid}, synchronize_session=False
+        )
+        for name, model in _CLAIMABLE_MODELS.items()
     }
+    db.commit()
+    return {"claimed": claimed}

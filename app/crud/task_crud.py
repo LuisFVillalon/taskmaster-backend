@@ -103,6 +103,12 @@ def update_task_status(db: Session, task_id: int, user_id: str):
     return task
 
 
+_TASK_UPDATE_FIELDS = (
+    "title", "description", "category", "completed", "due_date",
+    "due_time", "completed_date", "estimated_time", "parent_task_id",
+)
+
+
 def update_task(db: Session, task_id: int, task: TaskCreate, user_id: str):
     """Replace all fields of an existing task. Returns None if not found."""
     db_task = (
@@ -120,19 +126,10 @@ def update_task(db: Session, task_id: int, task: TaskCreate, user_id: str):
 
     if task.priority is not None:
         _validate_priority_unique(db, user_id, task.priority, exclude_task_id=task_id)
-        db_task.priority = task.priority
-    else:
-        db_task.priority = None
+    db_task.priority = task.priority
 
-    db_task.title = task.title
-    db_task.description = task.description
-    db_task.category = task.category
-    db_task.completed = task.completed
-    db_task.due_date = task.due_date
-    db_task.due_time = task.due_time
-    db_task.completed_date = task.completed_date
-    db_task.estimated_time = task.estimated_time
-    db_task.parent_task_id = task.parent_task_id
+    for field in _TASK_UPDATE_FIELDS:
+        setattr(db_task, field, getattr(task, field))
 
     db_task.tags.clear()
     for tag_data in task.tags:

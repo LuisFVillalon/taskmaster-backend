@@ -1,8 +1,11 @@
-from fastapi import FastAPI
-from app.routers import tags_router, tasks_router, notes_router, user_router, calendar_router, habits_router, profile_router
-from app.database.database import check_db_connection
-from fastapi.middleware.cors import CORSMiddleware
 import os
+import warnings
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.database.database import check_db_connection
+from app.routers import tags_router, tasks_router, notes_router, user_router, calendar_router, habits_router, profile_router
 
 app = FastAPI()
 
@@ -25,7 +28,6 @@ def startup():
     print(f"DATABASE_URL = {masked}")
 
     if not os.getenv("SUPABASE_JWT_SECRET"):
-        import warnings
         warnings.warn(
             "SUPABASE_JWT_SECRET is not set — all authenticated endpoints will return 500. "
             "Add it to .env: Supabase dashboard → Project Settings → API → JWT Secret",
@@ -35,7 +37,6 @@ def startup():
     try:
         check_db_connection()
     except Exception as exc:
-        import warnings
         warnings.warn(f"Startup DB check failed (app will still start): {exc}", stacklevel=1)
 
 app.include_router(tags_router.router)

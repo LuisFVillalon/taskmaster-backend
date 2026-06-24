@@ -9,23 +9,20 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.auth import UserInfo, get_current_user
+from app.core.http_utils import require_found
+from app.crud.profile_crud import get_profile, upsert_profile
 from app.database.database import get_db
-from app.models.profile_model import Profile
 from app.schemas.profile_schema import ProfileOut, ProfileSave
 
 router = APIRouter()
 
 
 @router.get("/get-profile", response_model=ProfileOut)
-def get_profile(
+def read_profile(
     current_user: UserInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
-    if profile is None:
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found.")
-    return profile
+    return require_found(get_profile(db, current_user.id), "Profile not found.")
 
 
 @router.post("/save-profile", response_model=ProfileOut)
@@ -34,13 +31,4 @@ def save_profile(
     current_user: UserInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    profile = db.query(Profile).filter(Profile.user_id == current_user.id).first()
-    if profile is None:
-        profile = Profile(user_id=current_user.id, name=body.name, shutoff_time=body.shutoff_time)
-        db.add(profile)
-    else:
-        profile.name = body.name
-        profile.shutoff_time = body.shutoff_time
-    db.commit()
-    db.refresh(profile)
-    return profile
+    return upsert_profile(db, current_user.id, body)

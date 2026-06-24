@@ -1,13 +1,12 @@
 from datetime import datetime
 from pydantic import BaseModel
-from typing import List, Optional
 from app.schemas.tag_schema import Tag
 
 
 class NoteBase(BaseModel):
     title: str = "Untitled Note"
     content: str = ""
-    tags: List[Tag] = []
+    tags: list[Tag] = []
 
 
 class NoteCreate(NoteBase):
@@ -15,9 +14,9 @@ class NoteCreate(NoteBase):
 
 
 class NoteUpdate(BaseModel):
-    title: Optional[str] = None
-    content: Optional[str] = None
-    tags: Optional[List[Tag]] = None
+    title: str | None = None
+    content: str | None = None
+    tags: list[Tag] | None = None
 
 
 class Note(NoteBase):
@@ -25,6 +24,6 @@ class Note(NoteBase):
     created_date: datetime
     updated_date: datetime
     # user_id set server-side from JWT; exposed in responses, never in requests.
-    user_id: Optional[str] = None
+    user_id: str | None = None
 
     model_config = {"from_attributes": True}

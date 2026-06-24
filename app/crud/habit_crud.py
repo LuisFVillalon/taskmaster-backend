@@ -65,6 +65,22 @@ def _apply_toggle_and_recalc(db: Session, habit: Habit, target_date: date) -> bo
     return today_logged
 
 
+# ── Shared helper ─────────────────────────────────────────────────────────────
+
+def _stamp(habit: Habit, logged: bool) -> Habit:
+    """Attach the transient logged_today attribute to a habit instance."""
+    setattr(habit, "logged_today", logged)
+    return habit
+
+
+def _is_logged_today(db: Session, habit_id: int) -> bool:
+    return (
+        db.query(HabitLog)
+        .filter(HabitLog.habit_id == habit_id, HabitLog.logged_date == date.today())
+        .first()
+    ) is not None
+
+
 # ── Public CRUD ──────────────────────────────────────────────────────────────
 
 def get_habits(db: Session, user_id: str):
@@ -81,23 +97,19 @@ def get_habits(db: Session, user_id: str):
         .all()
     }
     for habit in habits:
-        setattr(habit, "logged_today", habit.id in logged_today_ids)
+        _stamp(habit, habit.id in logged_today_ids)
 
     return habits
 
 
 def create_habit(db: Session, habit: HabitCreate, user_id: str):
-    db_habit = Habit(
-        title=habit.title,
-        user_id=user_id,
-    )
+    db_habit = Habit(title=habit.title, user_id=user_id)
     for tag_data in habit.tags:
         db_habit.tags.append(get_or_create_tag(db, tag_data, user_id))
     db.add(db_habit)
     db.commit()
     db.refresh(db_habit)
-    setattr(db_habit, "logged_today", False)
-    return db_habit
+    return _stamp(db_habit, False)
 
 
 def update_habit(db: Session, habit_id: int, habit: HabitCreate, user_id: str):
@@ -116,15 +128,7 @@ def update_habit(db: Session, habit_id: int, habit: HabitCreate, user_id: str):
 
     db.commit()
     db.refresh(db_habit)
-
-    today = date.today()
-    existing_log = (
-        db.query(HabitLog)
-        .filter(HabitLog.habit_id == habit_id, HabitLog.logged_date == today)
-        .first()
-    )
-    setattr(db_habit, "logged_today", existing_log is not None)
-    return db_habit
+    return _stamp(db_habit, _is_logged_today(db, habit_id))
 
 
 def delete_habit(db: Session, habit_id: int, user_id: str):
@@ -135,10 +139,9 @@ def delete_habit(db: Session, habit_id: int, user_id: str):
     )
     if not db_habit:
         return None
-    setattr(db_habit, "logged_today", False)
     db.delete(db_habit)
     db.commit()
-    return db_habit
+    return _stamp(db_habit, False)
 
 
 def toggle_habit_log(db: Session, habit_id: int, user_id: str):
@@ -153,8 +156,7 @@ def toggle_habit_log(db: Session, habit_id: int, user_id: str):
     is_logged_today = _apply_toggle_and_recalc(db, habit, date.today())
     db.commit()
     db.refresh(habit)
-    setattr(habit, "logged_today", is_logged_today)
-    return habit
+    return _stamp(habit, is_logged_today)
 
 
 def toggle_habit_log_date(db: Session, habit_id: int, user_id: str, target_date: date):
@@ -169,8 +171,7 @@ def toggle_habit_log_date(db: Session, habit_id: int, user_id: str, target_date:
     today_logged = _apply_toggle_and_recalc(db, habit, target_date)
     db.commit()
     db.refresh(habit)
-    setattr(habit, "logged_today", today_logged)
-    return habit
+    return _stamp(habit, today_logged)
 
 
 def get_habit_history(db: Session, habit_id: int, user_id: str, days: int = 30):

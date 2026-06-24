@@ -1,26 +1,25 @@
 from decimal import Decimal
 from datetime import date, time, datetime
 from pydantic import BaseModel, field_validator
-from typing import List, Optional
 from app.schemas.tag_schema import Tag, TagCreate
 
 
 class TaskBase(BaseModel):
     title: str
-    description: Optional[str] = None
-    category: Optional[str] = None
+    description: str | None = None
+    category: str | None = None
     completed: bool = False
-    priority: Optional[int] = None
+    priority: int | None = None
 
-    due_date: Optional[date] = None
-    due_time: Optional[time] = None
+    due_date: date | None = None
+    due_time: time | None = None
 
-    completed_date: Optional[datetime] = None
+    completed_date: datetime | None = None
 
-    estimated_time: Optional[float] = None
-    parent_task_id: Optional[int] = None
+    estimated_time: float | None = None
+    parent_task_id: int | None = None
 
-    tags: List[TagCreate] = []
+    tags: list[TagCreate] = []
 
     @field_validator("priority", mode="before")
     @classmethod
@@ -49,8 +48,9 @@ class TaskBase(BaseModel):
             raise ValueError("Estimated time must be non-negative")
         return v
 
+
 class TaskCreate(TaskBase):
-    tags: List[TagCreate] = []
+    pass
 
 
 class Task(TaskBase):
@@ -58,9 +58,7 @@ class Task(TaskBase):
     created_date: datetime
     # user_id is set server-side from the JWT — exposed in responses but never
     # accepted from the client in TaskCreate/TaskBase.
-    user_id: Optional[str] = None
-    tags: List[Tag] = []
+    user_id: str | None = None
+    tags: list[Tag] = []
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = {"from_attributes": True}

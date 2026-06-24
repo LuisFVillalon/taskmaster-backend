@@ -1,111 +1,138 @@
 # Task Master Backend
-TaskMaster Backend is a backend application of RESTful API's built for 
-managing tasks and tags in a task management application. It supports full CRUD 
-operations, data validation, and relational associations between tasks and tags.
-
+TaskMaster Backend is a RESTful API built in Python/FastAPI that powers a personal productivity web application. It handles tasks, notes, habits, calendar settings, and user profiles — all scoped to the authenticated user via Supabase JWTs.
 
 ## Overview
-The backend application uses Python as the language, FastAPI as a framework, SQLAlchemy for object-relational
-mapping, psycopg2-binary to connect to a PostgreSQL database, Pydantic for data validation, and CORS support
-to connect to a frontend,  with the goal to create and use RESTful API's that create, read, update, and delete.
+The backend uses FastAPI as the web framework, SQLAlchemy as the ORM, Alembic for database migrations, psycopg2-binary to connect to a PostgreSQL database hosted on Supabase, and Pydantic for data validation. Every endpoint requires a valid Supabase-issued JWT, which is verified server-side using either HS256 (symmetric) or ES256/RS256 (asymmetric JWKS) depending on the project configuration.
 
-Practiced backend application structure and RESTful APIfundamentals by creating schemas, routers, models, 
-implementing CRUD operations to a SQL database and error handling by reading HTTP status codes and error 
-messages for invalid requests.
-
-I created this backend application to use it to power a task manager web application. 
-
-Using FastAPI's Swagger UI fast-streamed development by prividing easy access to testing endpoints. 
-
-Hope to implement a journal table to the database to interact with. 
+I built this backend to power a task manager web application, and have expanded it over time to add multi-user auth, notes, habit tracking, and account management on top of the original task/tag foundation.
 
 ## Features
 
+### Authentication
+- **JWT Verification**: All endpoints require a `Bearer` token in the `Authorization` header.
+- **Algorithm support**: HS256 (via `SUPABASE_JWT_SECRET`) and asymmetric ES256/RS256 (via the Supabase JWKS endpoint).
+- **User isolation**: Every data row is tied to the authenticated user's UUID, so users can never access each other's data.
+
 ### Task Management
-- **Create Tasks**: Add new tasks with title, description, urgency flag, completion status, and optional due date/time.
-- **Read Tasks**: Retrieve all tasks or filter by specific criteria.
-- **Update Tasks**: Modify task details (full update) or toggle completion status.
-- **Delete Tasks**: Remove tasks by ID.
-- **Task Hierarchy**: Create parent-child task relationships using `parent_task_id` for task decomposition.
-- **Task Estimation**: Set estimated completion time in hours for planning and tracking.
-- **Task Complexity**: Rate task complexity from 1-5 to help with prioritization and sprint planning.
-- **Multi-User Support**: Assign tasks to users with `user_id` for scalable team collaboration.
-- **Task Properties**: Each task includes title, description, completed status, urgent flag, due date/time, estimated time (hours), complexity rating (1-5), parent task reference, and optional user assignment.
+- **Full CRUD**: Create, read, update, and delete tasks.
+- **Toggle completion**: PATCH endpoint to flip completed status (records `completed_date` automatically).
+- **Bulk create**: POST an array of tasks at once (`/save-tasks-list`), used by the AI task-plan flow.
+- **Task hierarchy**: `parent_task_id` FK for parent-child task decomposition.
+- **Task properties**: title, description, category, completed, priority (1–5), due date/time, estimated time (hours), parent task reference, created date, completed date.
 
 ### Tag Management
-- **Create Tags**: Add new tags with a unique name and optional color.
-- **Read Tags**: Retrieve all tags.
-- **Update Tags**: Modify tag name or color.
-- **Delete Tags**: Remove tags by ID.
-- **Tag Properties**: Each tag has a unique name and optional color for visual organization.
+- **Full CRUD**: Create, read, update, and delete tags (per-user).
+- **Tag properties**: unique name and optional color.
+- **Cross-entity tagging**: Tags can be applied to tasks, notes, and habits via many-to-many join tables.
 
-### Task-Tag Associations
-- **Many-to-Many Relationships**: Tasks can be associated with multiple tags, and tags can be linked to multiple tasks (e.g., categorize tasks by priority or project).
-- **Flexible Organization**: Use tags to group and filter tasks dynamically.
+### Notes Management
+- **Full CRUD**: Create, read, update, and delete notes.
+- **Note properties**: title, content (rich text), created date, updated date, associated tags.
+
+### Habit Tracking
+- **Full CRUD**: Create, read, update, and delete habits.
+- **Toggle today**: PATCH to mark a habit complete/incomplete for today — updates `current_streak` and `max_streak`.
+- **Toggle by date**: PATCH to retroactively toggle any past date — recalculates streaks from scratch.
+- **Streak verification**: POST `/verify-streaks` resets `current_streak` to 0 for habits whose last log is older than yesterday.
+- **History**: GET 30-day logged/not-logged history for a habit.
+- **Habit properties**: title, current streak, max streak, associated tags.
+
+### Calendar Settings
+- **Get/upsert**: Retrieve or update the authenticated user's calendar display preferences.
+
+### Profile
+- **Get/upsert**: Retrieve or save the authenticated user's profile data.
+
+### Account Management
+- **Update password**: POST `/update-password` — enforces a NIST-aligned password policy (12-char minimum, common-password blacklist, no email-in-password). Blocked for OAuth accounts (Google, GitHub, etc.).
+- **Delete account**: DELETE `/delete-account` — removes all user data from the database and hard-deletes the Supabase auth record via the Admin API.
+- **Claim data**: POST `/claim-data` — one-time migration that assigns any orphaned rows (pre-auth data) to the newly signed-in user.
 
 ## Tech Stack
-- **Language:** Python  
-- **Framework:** FastAPI  
-- **ORM:** SQLAlchemy  
-- **Database:** PostgreSQL  
-- **Database Driver:** psycopg2-binary  
-- **Data Validation:** Pydantic  
-- **Middleware:** CORS (to enable frontend communication)
+- **Language:** Python
+- **Framework:** FastAPI
+- **ORM:** SQLAlchemy
+- **Migrations:** Alembic
+- **Database:** PostgreSQL (hosted on Supabase)
+- **Database Driver:** psycopg2-binary
+- **Auth:** Supabase JWT (PyJWT + cryptography for ES256/RS256)
+- **Data Validation:** Pydantic v2
+- **HTTP Client:** httpx (for Supabase Admin API calls)
+- **Middleware:** CORS (localhost:3000 + Vercel production URL)
 
 ## Project Structure
 ```
-TaskMaster-Backend/
-├── package.json                 # Node.js package configuration (if used for any tooling)
-├── README.txt                   # Project documentation
-├── requirements.txt             # Python dependencies
-└── app/                         # Main application directory
-    ├── __init__.py              # Package initialization
-    ├── main.py                  # FastAPI application entry point
-    ├── __pycache__/             # Python bytecode cache
-    ├── crud/                    # Data access layer (CRUD operations)
-    │   ├── __init__.py
-    │   ├── tag_crud.py          # CRUD functions for tags
-    │   ├── task_crud.py         # CRUD functions for tasks
-    │   └── __pycache__/
-    ├── db/                      # Database configuration
-    │   ├── __init__.py
-    │   ├── database.py          # Database connection and session setup
-    │   └── __pycache__/
-    ├── models/                  # SQLAlchemy ORM models
-    │   ├── __init__.py
-    │   ├── tag_model.py         # Tag model definition
-    │   ├── task_model.py        # Task model definition
-    │   ├── task_tag_model.py    # Many-to-many association model for tasks and tags
-    │   └── __pycache__/
-    ├── routers/                 # FastAPI route handlers
-    │   ├── __init__.py
-    │   ├── tags_router.py       # API endpoints for tag operations
-    │   ├── tasks_router.py      # API endpoints for task operations
-    │   └── __pycache__/
-    └── schemas/                 # Pydantic data validation schemas
-        ├── __init__.py
-        ├── tag_schema.py        # Tag request/response schemas
-        ├── task_schema.py       # Task request/response schemas
-        └── __pycache__/
+taskmaster-backend/
+├── Dockerfile
+├── alembic.ini
+├── requirements.txt
+├── alembic/                         # Database migration scripts
+│   ├── env.py
+│   └── versions/                    # Migration history (tasks, notes, habits, auth, etc.)
+└── app/                             # Main application
+    ├── main.py                      # FastAPI app, CORS config, router registration
+    ├── config/
+    │   ├── settings.py              # Pydantic settings (DATABASE_URL, SUPABASE_URL, etc.)
+    │   └── supabase_client.py       # Supabase Python client initialization
+    ├── core/
+    │   ├── auth.py                  # JWT verification dependency (HS256 + JWKS)
+    │   └── http_utils.py            # require_found() helper (404 on None)
+    ├── crud/                        # Data access layer
+    │   ├── calendar_crud.py
+    │   ├── habit_crud.py
+    │   ├── note_crud.py
+    │   ├── profile_crud.py
+    │   ├── tag_crud.py
+    │   └── task_crud.py
+    ├── database/
+    │   └── database.py              # SQLAlchemy engine, session, Base, connection check
+    ├── models/                      # SQLAlchemy ORM models
+    │   ├── calendar_settings_model.py
+    │   ├── habit_model.py
+    │   ├── habit_log_model.py
+    │   ├── habit_tag_model.py       # habits ↔ tags join table
+    │   ├── note_model.py
+    │   ├── note_tag_model.py        # notes ↔ tags join table
+    │   ├── profile_model.py
+    │   ├── tag_model.py
+    │   ├── task_model.py
+    │   └── task_tag_model.py        # tasks ↔ tags join table
+    ├── routers/                     # FastAPI route handlers
+    │   ├── calendar_router.py
+    │   ├── habits_router.py
+    │   ├── notes_router.py
+    │   ├── profile_router.py
+    │   ├── tags_router.py
+    │   ├── tasks_router.py
+    │   └── user_router.py           # Password update + account deletion
+    └── schemas/                     # Pydantic request/response models
+        ├── calendar_schema.py
+        ├── habit_schema.py
+        ├── note_schema.py
+        ├── profile_schema.py
+        ├── tag_schema.py
+        └── task_schema.py
 ```
+
 ## Installation & Setup
 
 ### Prerequisites
-- Python 3.8 or higher
-- PostgreSQL database (or SQLite for local development)
+- Python 3.10 or higher
+- A Supabase project with a PostgreSQL database
 - pip (Python package installer)
 
 ### Installation Steps
 1. **Clone the repository:**
    ```
    git clone <repository-url>
-   cd TaskMaster-Backend
+   cd taskmaster-backend
    ```
 
 2. **Create a virtual environment:**
    ```
    python -m venv venv
-   source venv/Scripts/activate  # On Windows: venv\Scripts\activate
+   venv\Scripts\activate   # Windows
+   source venv/bin/activate  # macOS/Linux
    ```
 
 3. **Install dependencies:**
@@ -113,17 +140,21 @@ TaskMaster-Backend/
    pip install -r requirements.txt
    ```
 
-4. **Set up the database:**
-   - Ensure PostgreSQL is running.
-   - Create a database named `taskmaster` (or update `DATABASE_URL` accordingly).
-   - The application will automatically create tables on startup.
+4. **Configure environment variables:**
+   Create a `.env` file in the root directory:
+   ```
+   DATABASE_URL=postgresql://user:password@host:5432/dbname
+   SUPABASE_URL=https://<project-id>.supabase.co
+   SUPABASE_KEY=<anon-public-key>
+   SUPABASE_JWT_SECRET=<jwt-secret>
+   SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+   ```
+   All values are available in the Supabase dashboard under **Project Settings → API**.
 
-5. **Configure environment variables:**
-   Create a `.env` file in the root directory with:
+5. **Run database migrations:**
    ```
-   DATABASE_URL=postgresql://username:password@localhost:5432/taskmaster
+   alembic upgrade head
    ```
-   Replace with your PostgreSQL credentials. 
 
 6. **Run the application:**
    ```
@@ -132,41 +163,81 @@ TaskMaster-Backend/
    The server will start at `http://localhost:8000`.
 
 ## Environment Variables
-- `DATABASE_URL`: Database connection string.
-  - Example: `postgresql://user:pass@localhost:5432/taskmaster`
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string |
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_KEY` | Yes | Supabase anon/public key |
+| `SUPABASE_JWT_SECRET` | Yes | JWT secret for HS256 token verification |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes (account mgmt) | Service-role key for Admin API calls (password update, account deletion) |
+| `SUPABASE_JWKS_URL` | No | Override JWKS endpoint URL (defaults to `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`) |
 
 ## API Endpoints
 
-The API provides RESTful endpoints for managing tasks and tags. Access the interactive documentation at `http://localhost:8000/docs`.
+All endpoints require `Authorization: Bearer <supabase-jwt>`. Interactive docs available at `http://localhost:8000/docs`.
 
-### Tasks Endpoints
-- `GET /get-tasks`: Retrieve all tasks.
-- `POST /create-task`: Create a new task (body: TaskCreate schema).
-  - New optional fields: `estimated_time` (float, hours), `complexity` (int, 1-5), `parent_task_id` (int), `user_id` (int)
-- `PUT /update-task/{task_id}`: Update an existing task (body: TaskCreate schema).
-  - Supports updating all task properties including new fields.
-  - Validates that `parent_task_id` is a valid existing task and prevents self-reference.
-- `PATCH /update-task-status/{task_id}`: Toggle task completion status.
-- `DELETE /del-task/{task_id}`: Delete a task by ID.
+### Tasks
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/get-tasks` | Return all tasks for the authenticated user |
+| `POST` | `/create-task` | Create a new task |
+| `PUT` | `/update-task/{task_id}` | Replace all fields of a task |
+| `PATCH` | `/update-task-status/{task_id}` | Toggle completion status |
+| `DELETE` | `/del-task/{task_id}` | Delete a task |
+| `POST` | `/save-tasks-list` | Bulk-insert an array of tasks |
+| `POST` | `/claim-data` | Assign orphaned rows to the current user (one-time migration) |
 
-### Tags Endpoints
-- `GET /get-tags`: Retrieve all tags.
-- `POST /create-tags`: Create a new tag (body: TagCreate schema).
-- `PUT /update-tag/{tag_id}`: Update an existing tag (body: TagCreate schema).
-- `DELETE /del-tag/{tag_id}`: Delete a tag by ID.
+### Tags
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/get-tags` | Return all tags for the authenticated user |
+| `POST` | `/create-tags` | Create a new tag |
+| `PUT` | `/update-tag/{tag_id}` | Update a tag's name and color |
+| `DELETE` | `/del-tag/{tag_id}` | Delete a tag |
 
-### Root Endpoint
-- `GET /`: Welcome message.
+### Notes
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/get-notes` | Return all notes for the authenticated user |
+| `POST` | `/create-note` | Create a new note |
+| `PUT` | `/update-note/{note_id}` | Update a note's title, content, and tags |
+| `DELETE` | `/del-note/{note_id}` | Delete a note |
 
-## How to Use
-1. Start the server as described in Installation.
-2. Visit `http://localhost:8000/docs` for Swagger UI to test endpoints interactively.
-3. Integrate with a frontend (e.g., React app on `http://localhost:3000`) via CORS-enabled requests.
+### Habits
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/get-habits` | Return all habits with today's completion state |
+| `POST` | `/create-habit` | Create a new habit |
+| `PUT` | `/update-habit/{habit_id}` | Update a habit's title and tags |
+| `DELETE` | `/del-habit/{habit_id}` | Delete a habit and all its logs |
+| `PATCH` | `/toggle-habit/{habit_id}` | Toggle today's completion (updates streaks) |
+| `PATCH` | `/toggle-habit-date/{habit_id}` | Toggle completion for a specific past date |
+| `POST` | `/verify-streaks` | Reset streaks for habits not completed yesterday |
+| `GET` | `/habit-history/{habit_id}` | Return 30-day completion history |
 
-## Future Improvements
-- Implement a journal table for task history and auditing.
-- Add authentication and authorization (e.g., JWT tokens).
+### Calendar Settings
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/get-calendar-settings` | Return the user's calendar settings |
+| `PATCH` | `/update-calendar-settings` | Update calendar settings |
+
+### Profile
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/get-profile` | Return the user's profile |
+| `POST` | `/save-profile` | Upsert the user's profile |
+
+### Account Management
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/update-password` | Update password (email accounts only) |
+| `DELETE` | `/delete-account` | Delete all user data and Supabase auth record |
+
+### Root
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/` | Welcome message |
 
 ## Author
-[Luis Fernando Villalon] - Created as a learning project for backend development with FastAPI.
-```
+[Luis Fernando Villalon] — Built as a learning project for backend development with FastAPI, extended to include multi-user auth, habit tracking, and account management.
