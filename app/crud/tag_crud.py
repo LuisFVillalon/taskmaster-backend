@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.tag_model import Tag as TagModel
 from app.schemas.tag_schema import TagCreate
+from app.crud.base import get_owned
 
 
 def get_or_create_tag(db: Session, tag_data, user_id: str) -> TagModel:
@@ -37,11 +38,7 @@ def create_tag(db: Session, tag: TagCreate, user_id: str):
 
 def delete_tag(db: Session, tag_id: int, user_id: str):
     """Delete a tag by ID. Returns the deleted record, or None if not found."""
-    tag = (
-        db.query(TagModel)
-        .filter(TagModel.id == tag_id, TagModel.user_id == user_id)
-        .first()
-    )
+    tag = get_owned(db, TagModel, tag_id, user_id)
     if not tag:
         return None
     db.delete(tag)
@@ -51,11 +48,7 @@ def delete_tag(db: Session, tag_id: int, user_id: str):
 
 def update_tag(db: Session, tag_id: int, tag: TagCreate, user_id: str):
     """Update a tag's name and color. Returns None if not found."""
-    db_tag = (
-        db.query(TagModel)
-        .filter(TagModel.id == tag_id, TagModel.user_id == user_id)
-        .first()
-    )
+    db_tag = get_owned(db, TagModel, tag_id, user_id)
     if not db_tag:
         return None
     db_tag.name = tag.name

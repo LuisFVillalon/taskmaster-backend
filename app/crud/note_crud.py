@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.models.note_model import Note as NoteModel
 from app.schemas.note_schema import NoteCreate, NoteUpdate
+from app.crud.base import get_owned
 from app.crud.tag_crud import get_or_create_tag
 
 
@@ -30,11 +31,7 @@ def create_note(db: Session, note: NoteCreate, user_id: str):
 
 def update_note(db: Session, note_id: int, note: NoteUpdate, user_id: str):
     """Partially update a note's title, content, and tags. Returns None if not found."""
-    db_note = (
-        db.query(NoteModel)
-        .filter(NoteModel.id == note_id, NoteModel.user_id == user_id)
-        .first()
-    )
+    db_note = get_owned(db, NoteModel, note_id, user_id)
     if not db_note:
         return None
 
@@ -57,11 +54,7 @@ def update_note(db: Session, note_id: int, note: NoteUpdate, user_id: str):
 
 def delete_note(db: Session, note_id: int, user_id: str):
     """Delete a note. Returns the deleted record, or None if not found."""
-    db_note = (
-        db.query(NoteModel)
-        .filter(NoteModel.id == note_id, NoteModel.user_id == user_id)
-        .first()
-    )
+    db_note = get_owned(db, NoteModel, note_id, user_id)
     if not db_note:
         return None
     db.delete(db_note)

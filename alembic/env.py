@@ -20,9 +20,16 @@ if config.config_file_name is not None:
 from app.database.database import Base
 from app.models import (  # ensure every model is visible to autogenerate
     task_model,
+    task_tag_model,
     tag_model,
     note_model,
+    note_tag_model,
     profile_model,
+    drawing_model,
+    habit_model,
+    habit_log_model,
+    habit_tag_model,
+    calendar_settings_model,
 )
 
 target_metadata = Base.metadata

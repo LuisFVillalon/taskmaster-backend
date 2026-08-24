@@ -5,6 +5,12 @@ from pydantic import BaseModel
 class ProfileSave(BaseModel):
     name: str
     shutoff_time: str | None = None
+    avatar: str | None = None
+    theme_accent: str | None = None
+    page_style: str | None = None
+    day_start_time: str | None = None
+    rest_days: list[int] | None = None
+    layout_order: list[str] | None = None
 
 
 class ProfileOut(BaseModel):
@@ -12,5 +18,11 @@ class ProfileOut(BaseModel):
     name: str
     created_at: datetime
     shutoff_time: str | None = None
+    avatar: str | None = None
+    theme_accent: str | None = None
+    page_style: str | None = None
+    day_start_time: str | None = None
+    rest_days: list[int] | None = None
+    layout_order: list[str] | None = None
 
     model_config = {"from_attributes": True}

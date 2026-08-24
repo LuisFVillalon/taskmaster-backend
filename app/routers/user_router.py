@@ -7,8 +7,9 @@ POST /update-password
   (e.g. Google OAuth accounts) — they don't have a local credential to update.
 
 DELETE /delete-account
-  1. Removes all user data from the database (tasks, notes, tags, calendar_settings
-     and the junction rows that reference them).
+  1. Removes all user data from the database (tasks, notes, tags, habits,
+     profile, drawing, calendar_settings, and the junction rows that
+     reference them).
   2. Calls the Supabase Admin REST API to hard-delete the auth.users record so the
      e-mail address is freed and no orphaned auth rows remain.
 
@@ -28,7 +29,11 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import UserInfo, get_current_user
 from app.database.database import get_db
+from app.models.calendar_settings_model import CalendarSettings
+from app.models.drawing_model import Drawing
+from app.models.habit_model import Habit
 from app.models.note_model import Note
+from app.models.profile_model import Profile
 from app.models.tag_model import Tag
 from app.models.task_model import Task
 
@@ -197,10 +202,11 @@ async def delete_account(
             {"ids": task_ids},
         )
 
-    # ── 2. Delete owned rows (cascade handles note_tags) ────
-    db.query(Note).filter(Note.user_id == uid).delete()
-    db.query(Task).filter(Task.user_id == uid).delete()
-    db.query(Tag).filter(Tag.user_id == uid).delete()
+    # ── 2. Delete every row scoped to this user ───────────────────────────────
+    # note_tags/habit_tags cascade automatically; task_tags was cleared above.
+    # Adding a new user-owned table? Add its model here too.
+    for model in (Note, Task, Habit, Tag, Profile, Drawing, CalendarSettings):
+        db.query(model).filter(model.user_id == uid).delete(synchronize_session=False)
     db.commit()
 
     # ── 3. Delete the Supabase auth user ─────────────────────────────────────

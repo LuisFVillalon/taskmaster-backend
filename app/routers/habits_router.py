@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from datetime import date as date_type
 from app.core.auth import UserInfo, get_current_user
@@ -81,11 +81,12 @@ def verify_habit_streaks(
 @router.get("/habit-history/{habit_id}", response_model=list[HabitHistoryEntry])
 def read_habit_history(
     habit_id: int,
+    days: int = Query(30, ge=1, le=365),
     current_user: UserInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return the logged/not-logged status for the past 30 days for a habit."""
-    return require_found(get_habit_history(db, habit_id, current_user.id), "Habit not found")
+    """Return the logged/not-logged status for the past `days` days for a habit."""
+    return require_found(get_habit_history(db, habit_id, current_user.id, days), "Habit not found")
 
 
 @router.patch("/toggle-habit-date/{habit_id}", response_model=HabitResponse)

@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from app.models.tag_model import Tag as TagModel
 from app.models.task_model import Task as TaskModel
 from app.schemas.task_schema import TaskCreate
+from app.crud.base import get_owned
 from app.crud.tag_crud import get_or_create_tag
 
 
@@ -75,11 +76,7 @@ def create_task(db: Session, task: TaskCreate, user_id: str):
 
 def delete_task(db: Session, task_id: int, user_id: str):
     """Delete a task. Returns the deleted record, or None if not found."""
-    task = (
-        db.query(TaskModel)
-        .filter(TaskModel.id == task_id, TaskModel.user_id == user_id)
-        .first()
-    )
+    task = get_owned(db, TaskModel, task_id, user_id)
     if not task:
         return None
     db.delete(task)
@@ -89,11 +86,7 @@ def delete_task(db: Session, task_id: int, user_id: str):
 
 def update_task_status(db: Session, task_id: int, user_id: str):
     """Toggle a task's completed status and update completed_date accordingly."""
-    task = (
-        db.query(TaskModel)
-        .filter(TaskModel.id == task_id, TaskModel.user_id == user_id)
-        .first()
-    )
+    task = get_owned(db, TaskModel, task_id, user_id)
     if not task:
         return None
     task.completed = not task.completed
@@ -111,11 +104,7 @@ _TASK_UPDATE_FIELDS = (
 
 def update_task(db: Session, task_id: int, task: TaskCreate, user_id: str):
     """Replace all fields of an existing task. Returns None if not found."""
-    db_task = (
-        db.query(TaskModel)
-        .filter(TaskModel.id == task_id, TaskModel.user_id == user_id)
-        .first()
-    )
+    db_task = get_owned(db, TaskModel, task_id, user_id)
     if not db_task:
         return None
 

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, func
+from sqlalchemy import Column, String, DateTime, JSON, func
 from app.database.database import Base
 
 
@@ -9,3 +9,9 @@ class Profile(Base):
     name = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     shutoff_time = Column(String(5), nullable=True)
+    avatar = Column(String, nullable=True)
+    theme_accent = Column(String, nullable=True)
+    page_style = Column(String, nullable=True)
+    day_start_time = Column(String(5), nullable=True)
+    rest_days = Column(JSON, nullable=True)
+    layout_order = Column(JSON, nullable=True)

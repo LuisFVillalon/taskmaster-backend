@@ -8,13 +8,14 @@ def get_profile(db: Session, user_id: str) -> Profile | None:
 
 
 def upsert_profile(db: Session, user_id: str, body: ProfileSave) -> Profile:
+    fields = body.model_dump(exclude_unset=True)
     profile = get_profile(db, user_id)
     if profile is None:
-        profile = Profile(user_id=user_id, name=body.name, shutoff_time=body.shutoff_time)
+        profile = Profile(user_id=user_id, **fields)
         db.add(profile)
     else:
-        profile.name = body.name
-        profile.shutoff_time = body.shutoff_time
+        for key, value in fields.items():
+            setattr(profile, key, value)
     db.commit()
     db.refresh(profile)
     return profile

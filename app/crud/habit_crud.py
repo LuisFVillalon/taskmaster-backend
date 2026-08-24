@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from app.models.habit_model import Habit
 from app.models.habit_log_model import HabitLog
 from app.schemas.habit_schema import HabitCreate
+from app.crud.base import get_owned
 from app.crud.tag_crud import get_or_create_tag
 
 
@@ -113,11 +114,7 @@ def create_habit(db: Session, habit: HabitCreate, user_id: str):
 
 
 def update_habit(db: Session, habit_id: int, habit: HabitCreate, user_id: str):
-    db_habit = (
-        db.query(Habit)
-        .filter(Habit.id == habit_id, Habit.user_id == user_id)
-        .first()
-    )
+    db_habit = get_owned(db, Habit, habit_id, user_id)
     if not db_habit:
         return None
 
@@ -132,11 +129,7 @@ def update_habit(db: Session, habit_id: int, habit: HabitCreate, user_id: str):
 
 
 def delete_habit(db: Session, habit_id: int, user_id: str):
-    db_habit = (
-        db.query(Habit)
-        .filter(Habit.id == habit_id, Habit.user_id == user_id)
-        .first()
-    )
+    db_habit = get_owned(db, Habit, habit_id, user_id)
     if not db_habit:
         return None
     db.delete(db_habit)
@@ -146,11 +139,7 @@ def delete_habit(db: Session, habit_id: int, user_id: str):
 
 def toggle_habit_log(db: Session, habit_id: int, user_id: str):
     """Toggle today's completion log. Updates current_streak and max_streak."""
-    habit = (
-        db.query(Habit)
-        .filter(Habit.id == habit_id, Habit.user_id == user_id)
-        .first()
-    )
+    habit = get_owned(db, Habit, habit_id, user_id)
     if not habit:
         return None
     is_logged_today = _apply_toggle_and_recalc(db, habit, date.today())
@@ -161,11 +150,7 @@ def toggle_habit_log(db: Session, habit_id: int, user_id: str):
 
 def toggle_habit_log_date(db: Session, habit_id: int, user_id: str, target_date: date):
     """Toggle completion for a specific date, then recalculate streaks from scratch."""
-    habit = (
-        db.query(Habit)
-        .filter(Habit.id == habit_id, Habit.user_id == user_id)
-        .first()
-    )
+    habit = get_owned(db, Habit, habit_id, user_id)
     if not habit:
         return None
     today_logged = _apply_toggle_and_recalc(db, habit, target_date)
@@ -176,7 +161,7 @@ def toggle_habit_log_date(db: Session, habit_id: int, user_id: str, target_date:
 
 def get_habit_history(db: Session, habit_id: int, user_id: str, days: int = 30):
     """Return a list of {date, logged} entries for the past `days` days (including today)."""
-    habit = db.query(Habit).filter(Habit.id == habit_id, Habit.user_id == user_id).first()
+    habit = get_owned(db, Habit, habit_id, user_id)
     if not habit:
         return None
 
