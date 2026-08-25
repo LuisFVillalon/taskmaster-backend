@@ -11,6 +11,10 @@ class ProfileSave(BaseModel):
     day_start_time: str | None = None
     rest_days: list[int] | None = None
     layout_order: list[str] | None = None
+    app_mode: str | None = None
+    daily_brief_collapsed: bool | None = None
+    dashboard_view: str | None = None
+    notes_view_mode: str | None = None
 
 
 class ProfileOut(BaseModel):
@@ -24,5 +28,9 @@ class ProfileOut(BaseModel):
     day_start_time: str | None = None
     rest_days: list[int] | None = None
     layout_order: list[str] | None = None
+    app_mode: str | None = None
+    daily_brief_collapsed: bool | None = None
+    dashboard_view: str | None = None
+    notes_view_mode: str | None = None
 
     model_config = {"from_attributes": True}
