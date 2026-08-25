@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 from sqlalchemy.orm import Session
 from app.models.task_model import Task as TaskModel
 from app.crud.habit_crud import get_habits
@@ -38,12 +38,41 @@ def _due_date_only(task: TaskModel) -> date | None:
     return task.due_date.date() if task.due_date else None
 
 
-def _build_workload(profile, due_today: list[TaskModel]) -> WorkloadCapacity:
+def _parse_local_date(value: str | None) -> date | None:
+    """Parse a caller-supplied "YYYY-MM-DD" local date, ignoring anything malformed."""
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _parse_local_time(value: str | None) -> time | None:
+    """Parse a caller-supplied "HH:MM" local time, ignoring anything malformed."""
+    if not value:
+        return None
+    try:
+        hour_str, minute_str = value.split(":")[:2]
+        return time(int(hour_str), int(minute_str))
+    except (ValueError, IndexError):
+        return None
+
+
+def _time_has_passed(task: TaskModel, now_time: time | None) -> bool:
+    """True when a task due *today* also has a due_time that is already behind
+    the caller's current local time — i.e. its deadline has actually passed."""
+    if now_time is None or task.due_time is None:
+        return False
+    return task.due_time < now_time
+
+
+def _build_workload(profile, due_today: list[TaskModel], today: date) -> WorkloadCapacity:
     is_rest_day = False
     available_minutes = None
 
     if profile:
-        weekday = date.today().isoweekday() % 7  # 0=Sun..6=Sat, matches Profile.rest_days
+        weekday = today.isoweekday() % 7  # 0=Sun..6=Sat, matches Profile.rest_days
         is_rest_day = bool(profile.rest_days) and weekday in profile.rest_days
         if profile.day_start_time and profile.shutoff_time:
             available_minutes = _minutes_between(profile.day_start_time, profile.shutoff_time)
@@ -99,10 +128,24 @@ def _build_focus_next(all_open: list[TaskModel], today: date) -> list[FocusNextI
     return items[:FOCUS_NEXT_LIMIT]
 
 
-def build_daily_debrief(db: Session, user_id: str) -> DailyDebriefReport:
+def build_daily_debrief(
+    db: Session,
+    user_id: str,
+    local_date: str | None = None,
+    local_time: str | None = None,
+) -> DailyDebriefReport:
     """Assemble the daily debrief report: overdue/due-today tasks, habit status,
-    workload capacity, and a unified 'focus next' recommendation block."""
-    today = date.today()
+    workload capacity, and a unified 'focus next' recommendation block.
+
+    local_date/local_time are the caller's own calendar date and clock time
+    (not the server's). The server may run in a different timezone (e.g. UTC),
+    so falling back to date.today() here can roll "today" over before the
+    user's actual local day ends, silently reclassifying today's tasks as
+    overdue. Similarly, a task due today isn't actually overdue until its own
+    due_time — if any — has passed in the caller's local time.
+    """
+    today = _parse_local_date(local_date) or date.today()
+    now_time = _parse_local_time(local_time)
 
     open_tasks = (
         db.query(TaskModel)
@@ -110,11 +153,20 @@ def build_daily_debrief(db: Session, user_id: str) -> DailyDebriefReport:
         .all()
     )
     overdue = sorted(
-        (t for t in open_tasks if _due_date_only(t) and _due_date_only(t) < today),
+        (
+            t for t in open_tasks
+            if _due_date_only(t) and (
+                _due_date_only(t) < today
+                or (_due_date_only(t) == today and _time_has_passed(t, now_time))
+            )
+        ),
         key=lambda t: (_due_date_only(t), _priority_sort_key(t)),
     )
     due_today = sorted(
-        (t for t in open_tasks if _due_date_only(t) == today),
+        (
+            t for t in open_tasks
+            if _due_date_only(t) == today and not _time_has_passed(t, now_time)
+        ),
         key=_priority_sort_key,
     )
 
@@ -122,7 +174,7 @@ def build_daily_debrief(db: Session, user_id: str) -> DailyDebriefReport:
     habit_status = [HabitDebriefStatus.model_validate(h) for h in habits]
 
     profile = get_profile(db, user_id)
-    workload = _build_workload(profile, due_today)
+    workload = _build_workload(profile, due_today, today)
 
     focus_next = _build_focus_next(open_tasks, today)
 
