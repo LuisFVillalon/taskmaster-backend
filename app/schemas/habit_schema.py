@@ -1,10 +1,23 @@
-from pydantic import BaseModel
+from decimal import Decimal
+from pydantic import BaseModel, field_validator
 from app.schemas.tag_schema import Tag
 
 
 class HabitBase(BaseModel):
     title: str
     tags: list[Tag] = []
+    estimated_time: float | None = None
+
+    @field_validator("estimated_time", mode="before")
+    @classmethod
+    def validate_estimated_time(cls, v):
+        if v is None:
+            return v
+        if isinstance(v, Decimal):
+            v = float(v)
+        if v < 0:
+            raise ValueError("Estimated time must be non-negative")
+        return v
 
 
 class HabitCreate(HabitBase):

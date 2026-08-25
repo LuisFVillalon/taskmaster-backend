@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, Numeric
 from sqlalchemy.orm import relationship
 from app.database.database import Base
 from app.models.habit_tag_model import habit_tags
@@ -12,6 +12,7 @@ class Habit(Base):
     user_id = Column(String(36), nullable=True, index=True)
     current_streak = Column(Integer, nullable=False, default=0)
     max_streak = Column(Integer, nullable=False, default=0)
+    estimated_time = Column(Numeric(precision=10, scale=2), nullable=True)
 
     tags = relationship(
         "Tag",

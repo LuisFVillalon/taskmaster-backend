@@ -104,7 +104,7 @@ def get_habits(db: Session, user_id: str):
 
 
 def create_habit(db: Session, habit: HabitCreate, user_id: str):
-    db_habit = Habit(title=habit.title, user_id=user_id)
+    db_habit = Habit(title=habit.title, user_id=user_id, estimated_time=habit.estimated_time)
     for tag_data in habit.tags:
         db_habit.tags.append(get_or_create_tag(db, tag_data, user_id))
     db.add(db_habit)
@@ -119,6 +119,7 @@ def update_habit(db: Session, habit_id: int, habit: HabitCreate, user_id: str):
         return None
 
     db_habit.title = habit.title
+    db_habit.estimated_time = habit.estimated_time
     db_habit.tags.clear()
     for tag_data in habit.tags:
         db_habit.tags.append(get_or_create_tag(db, tag_data, user_id))
