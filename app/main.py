@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database.database import check_db_connection
-from app.routers import tags_router, tasks_router, notes_router, user_router, calendar_router, habits_router, profile_router, drawing_router, debrief_router
+from app.routers import tags_router, tasks_router, notes_router, user_router, calendar_router, habits_router, profile_router, drawing_router, debrief_router, demo_router
 
 # Comma-separated list of allowed frontend origins, e.g.
 # "http://localhost:3000,https://task-master-mvp.vercel.app"
@@ -60,6 +60,7 @@ app.include_router(habits_router.router)
 app.include_router(profile_router.router)
 app.include_router(drawing_router.router)
 app.include_router(debrief_router.router)
+app.include_router(demo_router.router)
 
 @app.get("/")
 def read_root():
