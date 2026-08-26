@@ -57,16 +57,6 @@ class UserInfo:
                    # sourced from app_metadata.provider in the JWT payload
 
 
-def _get_jwt_secret() -> str:
-    secret = os.getenv("SUPABASE_JWT_SECRET")
-    if not secret:
-        raise RuntimeError(
-            "SUPABASE_JWT_SECRET is not set. "
-            "Find it at: Supabase dashboard → Project Settings → API → JWT Secret"
-        )
-    return secret
-
-
 @lru_cache(maxsize=1)
 def _get_jwks_client() -> PyJWKClient:
     """Return a cached JWKS client for the Supabase project.

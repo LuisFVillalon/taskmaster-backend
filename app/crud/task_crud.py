@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from fastapi import HTTPException
-from app.models.tag_model import Tag as TagModel
 from app.models.task_model import Task as TaskModel
 from app.schemas.task_schema import TaskCreate
 from app.crud.base import get_owned
