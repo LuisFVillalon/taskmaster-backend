@@ -18,8 +18,7 @@ def upsert_calendar_settings(
     if row is None:
         row = CalendarSettingsModel(
             user_id=user_id,
-            title=changes.get("title", "Big Picture Calendar"),
-            sub_header=changes.get("sub_header", "First Quarter"),
+            title=changes.get("title", "Term Tracker"),
             start_date=changes.get("start_date", date(2026, 1, 1)),
             end_date=changes.get("end_date", date(2026, 3, 31)),
         )

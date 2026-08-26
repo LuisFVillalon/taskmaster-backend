@@ -24,6 +24,7 @@ from app.models import (  # ensure every model is visible to autogenerate
     tag_model,
     note_model,
     note_tag_model,
+    note_session_model,
     profile_model,
     drawing_model,
     habit_model,

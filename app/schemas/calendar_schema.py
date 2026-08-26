@@ -5,7 +5,6 @@ from typing import Optional
 
 class CalendarSettingsUpdate(BaseModel):
     title: Optional[str] = None
-    sub_header: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
 
@@ -13,7 +12,6 @@ class CalendarSettingsUpdate(BaseModel):
 class CalendarSettings(BaseModel):
     id: int
     title: str
-    sub_header: str
     start_date: date
     end_date: date
 

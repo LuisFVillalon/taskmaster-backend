@@ -12,7 +12,7 @@ from app.routers import tags_router, tasks_router, notes_router, user_router, ca
 # "http://localhost:3000,https://task-master-mvp.vercel.app"
 # New deployment targets (a staging URL, a custom domain) are added via env
 # var, not a source change.
-_DEFAULT_ORIGINS = "http://localhost:3000,https://task-master-mvp.vercel.app"
+_DEFAULT_ORIGINS = "http://localhost:3000,https://kanso-web-app.vercel.app"
 ALLOWED_ORIGINS = [
     origin.strip()
     for origin in os.getenv("ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(",")

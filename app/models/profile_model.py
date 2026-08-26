@@ -15,6 +15,7 @@ class Profile(Base):
     day_start_time = Column(String(5), nullable=True)
     rest_days = Column(JSON, nullable=True)
     layout_order = Column(JSON, nullable=True)
+    layout_sizes = Column(JSON, nullable=True)
     app_mode = Column(String, nullable=True)
     daily_brief_collapsed = Column(Boolean, nullable=True)
     dashboard_view = Column(String, nullable=True)

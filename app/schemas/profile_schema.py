@@ -11,6 +11,7 @@ class ProfileSave(BaseModel):
     day_start_time: str | None = None
     rest_days: list[int] | None = None
     layout_order: list[str] | None = None
+    layout_sizes: dict[str, str] | None = None
     app_mode: str | None = None
     daily_brief_collapsed: bool | None = None
     dashboard_view: str | None = None
@@ -28,6 +29,7 @@ class ProfileOut(BaseModel):
     day_start_time: str | None = None
     rest_days: list[int] | None = None
     layout_order: list[str] | None = None
+    layout_sizes: dict[str, str] | None = None
     app_mode: str | None = None
     daily_brief_collapsed: bool | None = None
     dashboard_view: str | None = None

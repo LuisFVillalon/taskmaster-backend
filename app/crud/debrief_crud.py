@@ -1,18 +1,22 @@
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.models.task_model import Task as TaskModel
+from app.models.note_model import Note as NoteModel
 from app.crud.habit_crud import get_habits
 from app.crud.profile_crud import get_profile
+from app.crud.note_session_crud import get_time_by_note_for_date, get_time_by_note_for_datetime_range
 from app.schemas.debrief_schema import (
     DailyDebriefReport,
     DebriefTaskItem,
+    DebriefNoteItem,
     HabitDebriefStatus,
     WorkloadCapacity,
     FocusNextItem,
 )
 
-# Tasks at or above this estimated_time (minutes) count as "high effort" for focus_next.
-HIGH_EFFORT_MINUTES_THRESHOLD = 120
+# Tasks at or above this estimated_time (hours) count as "high effort" for focus_next.
+HIGH_EFFORT_HOURS_THRESHOLD = 2
 FOCUS_NEXT_WINDOW_DAYS = 3
 FOCUS_NEXT_LIMIT = 5
 
@@ -67,6 +71,26 @@ def _time_has_passed(task: TaskModel, now_time: time | None) -> bool:
     return task.due_time < now_time
 
 
+def _local_day_bounds_utc(today: date, now_time: time | None) -> tuple[datetime, datetime] | None:
+    """UTC [start, end) range covering the caller's local calendar day.
+
+    `completed_date` is stored as a UTC wall-clock timestamp, so comparing its
+    date part directly against the caller's local date (as a naive `func.date()
+    == today` would) misclassifies tasks completed near midnight whenever the
+    caller's local day and the UTC day disagree — e.g. a task completed at
+    9pm Pacific is already the next UTC calendar day. Deriving the offset
+    between the caller's local time and the server's current UTC time lets us
+    convert "today" into the correct UTC instant range instead. Returns None
+    when local_time wasn't supplied, since the offset can't be determined.
+    """
+    if now_time is None:
+        return None
+    local_now = datetime.combine(today, now_time)
+    offset = datetime.utcnow() - local_now
+    day_start_utc = datetime.combine(today, time.min) + offset
+    return day_start_utc, day_start_utc + timedelta(days=1)
+
+
 def _build_workload(profile, due_today: list[TaskModel], today: date) -> WorkloadCapacity:
     is_rest_day = False
     available_minutes = None
@@ -77,7 +101,8 @@ def _build_workload(profile, due_today: list[TaskModel], today: date) -> Workloa
         if profile.day_start_time and profile.shutoff_time:
             available_minutes = _minutes_between(profile.day_start_time, profile.shutoff_time)
 
-    committed_minutes = sum(float(t.estimated_time) for t in due_today if t.estimated_time)
+    # estimated_time is stored in hours; convert to minutes to match available_minutes.
+    committed_minutes = sum(float(t.estimated_time) * 60 for t in due_today if t.estimated_time)
 
     utilization_pct = None
     is_overcommitted = False
@@ -94,6 +119,27 @@ def _build_workload(profile, due_today: list[TaskModel], today: date) -> Workloa
     )
 
 
+def _build_notes_worked_today(
+    db: Session, user_id: str, today: date, day_bounds: tuple[datetime, datetime] | None
+) -> list[DebriefNoteItem]:
+    if day_bounds:
+        time_by_note = get_time_by_note_for_datetime_range(db, user_id, day_bounds[0], day_bounds[1])
+    else:
+        time_by_note = get_time_by_note_for_date(db, user_id, today)
+    minutes_by_note = {note_id: seconds / 60 for note_id, seconds in time_by_note}
+    if not minutes_by_note:
+        return []
+    notes = (
+        db.query(NoteModel)
+        .filter(NoteModel.id.in_(minutes_by_note.keys()), NoteModel.user_id == user_id)
+        .all()
+    )
+    return [
+        DebriefNoteItem(id=n.id, title=n.title, minutes=minutes_by_note[n.id], tags=n.tags)
+        for n in notes
+    ]
+
+
 def _build_focus_next(all_open: list[TaskModel], today: date) -> list[FocusNextItem]:
     window_end = today + timedelta(days=FOCUS_NEXT_WINDOW_DAYS)
     upcoming = [t for t in all_open if _due_date_only(t) and today < _due_date_only(t) <= window_end]
@@ -104,7 +150,7 @@ def _build_focus_next(all_open: list[TaskModel], today: date) -> list[FocusNextI
             t for t in upcoming
             if t.priority is None
             and t.estimated_time
-            and float(t.estimated_time) >= HIGH_EFFORT_MINUTES_THRESHOLD
+            and float(t.estimated_time) >= HIGH_EFFORT_HOURS_THRESHOLD
         ),
         key=lambda t: float(t.estimated_time),
         reverse=True,
@@ -169,9 +215,28 @@ def build_daily_debrief(
         ),
         key=_priority_sort_key,
     )
+    completed_today_query = db.query(TaskModel).filter(
+        TaskModel.user_id == user_id,
+        TaskModel.completed == True,  # noqa: E712
+    )
+    day_bounds = _local_day_bounds_utc(today, now_time)
+    if day_bounds:
+        day_start_utc, day_end_utc = day_bounds
+        completed_today_query = completed_today_query.filter(
+            TaskModel.completed_date >= day_start_utc,
+            TaskModel.completed_date < day_end_utc,
+        )
+    else:
+        completed_today_query = completed_today_query.filter(func.date(TaskModel.completed_date) == today)
+    # Completed tasks count toward today's activity regardless of their own
+    # due_date — a task due yesterday (or next week) that gets finished today
+    # still belongs in today's activity log.
+    completed_today = completed_today_query.all()
 
     habits = get_habits(db, user_id)
     habit_status = [HabitDebriefStatus.model_validate(h) for h in habits]
+
+    notes_worked_today = _build_notes_worked_today(db, user_id, today, day_bounds)
 
     profile = get_profile(db, user_id)
     workload = _build_workload(profile, due_today, today)
@@ -182,6 +247,8 @@ def build_daily_debrief(
         report_date=today,
         overdue_tasks=[DebriefTaskItem.model_validate(t) for t in overdue],
         due_today_tasks=[DebriefTaskItem.model_validate(t) for t in due_today],
+        completed_today_tasks=[DebriefTaskItem.model_validate(t) for t in completed_today],
+        notes_worked_today=notes_worked_today,
         habit_status=habit_status,
         workload=workload,
         focus_next=focus_next,

@@ -27,3 +27,6 @@ htmlcov/
 .idea/
 .DS_Store
 Thumbs.db
+
+# local dev logs
+_debug_uvicorn.log*

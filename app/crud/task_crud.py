@@ -98,7 +98,7 @@ def update_task_status(db: Session, task_id: int, user_id: str):
 
 _TASK_UPDATE_FIELDS = (
     "title", "description", "category", "completed", "due_date",
-    "due_time", "completed_date", "estimated_time", "parent_task_id",
+    "due_time", "estimated_time", "parent_task_id",
 )
 
 
@@ -117,8 +117,22 @@ def update_task(db: Session, task_id: int, task: TaskCreate, user_id: str):
         _validate_priority_unique(db, user_id, task.priority, exclude_task_id=task_id)
     db_task.priority = task.priority
 
+    was_completed = db_task.completed
+
     for field in _TASK_UPDATE_FIELDS:
         setattr(db_task, field, getattr(task, field))
+
+    # completed_date is always server-computed (like create_task/update_task_status)
+    # rather than trusting the client's value: the client sends its own local
+    # wall-clock time, not a true UTC timestamp, and the debrief's "completed
+    # today" window math (see debrief_crud._local_day_bounds_utc) assumes
+    # completed_date is genuine UTC — trusting the client value made that
+    # comparison misalign by the caller's UTC offset, silently dropping
+    # same-day completions out of the daily brief's activity log.
+    if task.completed and not was_completed:
+        db_task.completed_date = datetime.now(timezone.utc)
+    elif not task.completed:
+        db_task.completed_date = None
 
     db_task.tags.clear()
     for tag_data in task.tags:
