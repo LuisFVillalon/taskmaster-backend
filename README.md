@@ -34,6 +34,7 @@ I built this backend to power a task manager web application, and have expanded 
 ### Habit Tracking
 - **Full CRUD**: Create, read, update, and delete habits.
 - **Toggle today**: PATCH to mark a habit complete/incomplete for today — updates `current_streak` and `max_streak`.
+- **Timezone-safe "today"**: the read/toggle/verify/history endpoints accept the caller's local calendar date (`?local_date=YYYY-MM-DD`, or `local_date` in the toggle-date body) so a server/client timezone gap can't roll "today" over early and drop a habit's done-today state.
 - **Toggle by date**: PATCH to retroactively toggle any past date — recalculates streaks from scratch.
 - **Streak verification**: POST `/verify-streaks` resets `current_streak` to 0 for habits whose last log is older than yesterday.
 - **History**: GET 30-day logged/not-logged history for a habit.
@@ -228,14 +229,14 @@ All endpoints require `Authorization: Bearer <supabase-jwt>`. Interactive docs a
 ### Habits
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/get-habits` | Return all habits with today's completion state |
+| `GET` | `/get-habits?local_date=` | Return all habits with today's completion state |
 | `POST` | `/create-habit` | Create a new habit |
 | `PUT` | `/update-habit/{habit_id}` | Update a habit's title and tags |
 | `DELETE` | `/del-habit/{habit_id}` | Delete a habit and all its logs |
-| `PATCH` | `/toggle-habit/{habit_id}` | Toggle today's completion (updates streaks) |
-| `PATCH` | `/toggle-habit-date/{habit_id}` | Toggle completion for a specific past date |
-| `POST` | `/verify-streaks` | Reset streaks for habits not completed yesterday |
-| `GET` | `/habit-history/{habit_id}` | Return 30-day completion history |
+| `PATCH` | `/toggle-habit/{habit_id}?local_date=` | Toggle today's completion (updates streaks) |
+| `PATCH` | `/toggle-habit-date/{habit_id}` | Toggle completion for a specific date (`local_date` in body) |
+| `POST` | `/verify-streaks?local_date=` | Reset streaks for habits not completed yesterday |
+| `GET` | `/habit-history/{habit_id}?local_date=` | Return 30-day completion history |
 
 ### Calendar Settings
 | Method | Path | Description |

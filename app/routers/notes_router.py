@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from datetime import date as date_type
+from datetime import date as date_type, datetime, time as time_type, timedelta
 from app.core.auth import UserInfo, get_current_user
 from app.core.http_utils import require_found
 from app.database.database import get_db
@@ -13,6 +13,7 @@ from app.crud.note_session_crud import (
     get_total_time_seconds,
     get_total_time_by_note,
     get_time_by_note_for_range,
+    get_time_by_note_for_datetime_range,
     reap_stale_sessions,
 )
 
@@ -105,6 +106,18 @@ def read_all_note_time_spent(
 def read_note_time_spent_for_range(
     start_date: str = Query(...),
     end_date: str = Query(...),
+    utc_offset_minutes: int | None = Query(
+        None,
+        description=(
+            "The caller's UTC offset as returned by JS Date.getTimezoneOffset() "
+            "(minutes to add to local time to reach UTC; e.g. 420 for US Pacific "
+            "in summer). When supplied, [start_date, end_date] are treated as the "
+            "caller's local calendar days and converted to the matching UTC "
+            "instant range, so sessions that end in the evening local time aren't "
+            "misbucketed into the next UTC day. Omitted: falls back to comparing "
+            "the UTC calendar date of ended_at."
+        ),
+    ),
     current_user: UserInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -116,9 +129,21 @@ def read_note_time_spent_for_range(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date format. Use YYYY-MM-DD.")
     if start > end:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start_date must not be after end_date.")
+
+    if utc_offset_minutes is not None:
+        # ended_at is a naive UTC wall-clock timestamp. Convert the caller's
+        # local [start 00:00, end+1day 00:00) window into the matching UTC
+        # instants — same offset convention as debrief's _local_day_bounds_utc.
+        offset = timedelta(minutes=utc_offset_minutes)
+        start_utc = datetime.combine(start, time_type.min) + offset
+        end_utc = datetime.combine(end, time_type.min) + timedelta(days=1) + offset
+        rows = get_time_by_note_for_datetime_range(db, current_user.id, start_utc, end_utc)
+    else:
+        rows = get_time_by_note_for_range(db, current_user.id, start, end)
+
     return [
         {"note_id": note_id, "total_seconds": total_seconds}
-        for note_id, total_seconds in get_time_by_note_for_range(db, current_user.id, start, end)
+        for note_id, total_seconds in rows
     ]
 
 

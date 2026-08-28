@@ -233,7 +233,7 @@ def build_daily_debrief(
     # still belongs in today's activity log.
     completed_today = completed_today_query.all()
 
-    habits = get_habits(db, user_id)
+    habits = get_habits(db, user_id, local_date=today.isoformat())
     habit_status = [HabitDebriefStatus.model_validate(h) for h in habits]
 
     notes_worked_today = _build_notes_worked_today(db, user_id, today, day_bounds)

@@ -41,3 +41,8 @@ class HabitHistoryEntry(BaseModel):
 
 class HabitToggleDateRequest(BaseModel):
     date: str
+    # Caller's local calendar date ("YYYY-MM-DD"). Used for the streak
+    # grace-period ("logged today or yesterday?") calc so a server/client
+    # timezone gap can't roll "today" over early. Optional; the server falls
+    # back to its own date.today() when absent.
+    local_date: str | None = None

@@ -8,6 +8,26 @@ from app.crud.base import get_owned
 from app.crud.tag_crud import get_or_create_tag
 
 
+def _resolve_today(local_date: str | date | None) -> date:
+    """Resolve the caller's local calendar date, falling back to the server's.
+
+    Habit logs are local-calendar events, but the server process may run in a
+    different timezone (e.g. UTC). Relying on date.today() there rolls "today"
+    over before the user's local day ends, so a habit logged for the user's
+    local date reads back as not-logged-today and the streak/heatmap surfaces
+    disagree. Callers pass their own "YYYY-MM-DD"; anything malformed or
+    missing falls back to date.today().
+    """
+    if isinstance(local_date, date):
+        return local_date
+    if not local_date:
+        return date.today()
+    try:
+        return date.fromisoformat(local_date)
+    except ValueError:
+        return date.today()
+
+
 # ── Pure streak helpers (accept pre-fetched date collections) ────────────────
 
 def _streak_ending_on(log_dates: set, end_date: date) -> int:
@@ -38,9 +58,10 @@ def _max_streak_from_dates(log_dates: set) -> int:
 
 # ── Shared toggle core ───────────────────────────────────────────────────────
 
-def _apply_toggle_and_recalc(db: Session, habit: Habit, target_date: date) -> bool:
+def _apply_toggle_and_recalc(db: Session, habit: Habit, target_date: date, today: date) -> bool:
     """Toggle the log entry for target_date, recalculate streaks with a single DB read.
 
+    `today` is the caller's local calendar date (see _resolve_today).
     Returns True if today is now logged (used to set the logged_today attribute).
     """
     existing_log = (
@@ -58,7 +79,6 @@ def _apply_toggle_and_recalc(db: Session, habit: Habit, target_date: date) -> bo
         row.logged_date
         for row in db.query(HabitLog.logged_date).filter(HabitLog.habit_id == habit.id).all()
     }
-    today = date.today()
     today_logged = today in log_dates
     streak_end = today if today_logged else today - timedelta(days=1)
     habit.current_streak = _streak_ending_on(log_dates, streak_end)
@@ -74,22 +94,22 @@ def _stamp(habit: Habit, logged: bool) -> Habit:
     return habit
 
 
-def _is_logged_today(db: Session, habit_id: int) -> bool:
+def _is_logged_today(db: Session, habit_id: int, today: date) -> bool:
     return (
         db.query(HabitLog)
-        .filter(HabitLog.habit_id == habit_id, HabitLog.logged_date == date.today())
+        .filter(HabitLog.habit_id == habit_id, HabitLog.logged_date == today)
         .first()
     ) is not None
 
 
 # ── Public CRUD ──────────────────────────────────────────────────────────────
 
-def get_habits(db: Session, user_id: str):
+def get_habits(db: Session, user_id: str, local_date: str | None = None):
     habits = db.query(Habit).filter(Habit.user_id == user_id).all()
     if not habits:
         return habits
 
-    today = date.today()
+    today = _resolve_today(local_date)
     habit_ids = [h.id for h in habits]
     logged_today_ids = {
         row.habit_id
@@ -113,7 +133,7 @@ def create_habit(db: Session, habit: HabitCreate, user_id: str):
     return _stamp(db_habit, False)
 
 
-def update_habit(db: Session, habit_id: int, habit: HabitCreate, user_id: str):
+def update_habit(db: Session, habit_id: int, habit: HabitCreate, user_id: str, local_date: str | None = None):
     db_habit = get_owned(db, Habit, habit_id, user_id)
     if not db_habit:
         return None
@@ -126,7 +146,7 @@ def update_habit(db: Session, habit_id: int, habit: HabitCreate, user_id: str):
 
     db.commit()
     db.refresh(db_habit)
-    return _stamp(db_habit, _is_logged_today(db, habit_id))
+    return _stamp(db_habit, _is_logged_today(db, habit_id, _resolve_today(local_date)))
 
 
 def delete_habit(db: Session, habit_id: int, user_id: str):
@@ -138,35 +158,36 @@ def delete_habit(db: Session, habit_id: int, user_id: str):
     return _stamp(db_habit, False)
 
 
-def toggle_habit_log(db: Session, habit_id: int, user_id: str):
+def toggle_habit_log(db: Session, habit_id: int, user_id: str, local_date: str | None = None):
     """Toggle today's completion log. Updates current_streak and max_streak."""
     habit = get_owned(db, Habit, habit_id, user_id)
     if not habit:
         return None
-    is_logged_today = _apply_toggle_and_recalc(db, habit, date.today())
+    today = _resolve_today(local_date)
+    is_logged_today = _apply_toggle_and_recalc(db, habit, today, today)
     db.commit()
     db.refresh(habit)
     return _stamp(habit, is_logged_today)
 
 
-def toggle_habit_log_date(db: Session, habit_id: int, user_id: str, target_date: date):
+def toggle_habit_log_date(db: Session, habit_id: int, user_id: str, target_date: date, local_date: str | None = None):
     """Toggle completion for a specific date, then recalculate streaks from scratch."""
     habit = get_owned(db, Habit, habit_id, user_id)
     if not habit:
         return None
-    today_logged = _apply_toggle_and_recalc(db, habit, target_date)
+    today_logged = _apply_toggle_and_recalc(db, habit, target_date, _resolve_today(local_date))
     db.commit()
     db.refresh(habit)
     return _stamp(habit, today_logged)
 
 
-def get_habit_history(db: Session, habit_id: int, user_id: str, days: int = 30):
+def get_habit_history(db: Session, habit_id: int, user_id: str, days: int = 30, local_date: str | None = None):
     """Return a list of {date, logged} entries for the past `days` days (including today)."""
     habit = get_owned(db, Habit, habit_id, user_id)
     if not habit:
         return None
 
-    today = date.today()
+    today = _resolve_today(local_date)
     start = today - timedelta(days=days - 1)
 
     rows = (
@@ -186,7 +207,7 @@ def get_habit_history(db: Session, habit_id: int, user_id: str, days: int = 30):
     ]
 
 
-def verify_and_reset_streaks(db: Session, user_id: str):
+def verify_and_reset_streaks(db: Session, user_id: str, local_date: str | None = None):
     """Reset current_streak to 0 for habits whose last log entry is older than yesterday."""
     habits = (
         db.query(Habit)
@@ -196,7 +217,7 @@ def verify_and_reset_streaks(db: Session, user_id: str):
     if not habits:
         return {"reset_count": 0}
 
-    yesterday = date.today() - timedelta(days=1)
+    yesterday = _resolve_today(local_date) - timedelta(days=1)
     habit_ids = [h.id for h in habits]
 
     last_log_by_habit = {
